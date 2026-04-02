@@ -1,0 +1,389 @@
+/* MemOS Integration Styles */
+
+/* ==================== 悬浮按钮 ==================== */
+#memos-float-button {
+    position: fixed;
+    top: 150px;
+    right: 20px;
+    z-index: 9999;
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+#memos-float-button:hover {
+    transform: scale(1.15);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+/* ==================== 弹窗遮罩 ==================== */
+.memos-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    backdrop-filter: blur(3px);
+}
+
+/* ==================== 弹窗容器 ==================== */
+.memos-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10001;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    background: #1a1a2e;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==================== 弹窗头部 ==================== */
+.memos-popup-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: move;
+}
+
+.memos-popup-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: white;
+    font-weight: 600;
+}
+
+.memos-close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.memos-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* ==================== 弹窗内容 ==================== */
+.memos-popup-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 60px);
+}
+
+.author-info {
+    text-align: center;
+    color: #888;
+    font-size: 12px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+/* ==================== 可折叠 Section ==================== */
+.memos-section {
+    margin-bottom: 15px;
+    background: #16213e;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.memos-section-header {
+    background: #0f3460;
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s;
+}
+
+.memos-section-header:hover {
+    background: #1a4a7a;
+}
+
+.memos-section-header h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.toggle-icon {
+    color: #888;
+    font-size: 12px;
+    transition: transform 0.3s;
+}
+
+.memos-section.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.memos-section-content {
+    padding: 15px;
+    background: #16213e;
+}
+
+.memos-section.collapsed .memos-section-content {
+    display: none;
+}
+
+/* ==================== 表单控件 ==================== */
+.control-group {
+    margin-bottom: 15px;
+}
+
+.control-group label {
+    display: block;
+    color: #b0b0b0;
+    font-size: 13px;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.control-group input[type="text"],
+.control-group input[type="password"],
+.control-group input[type="number"],
+.control-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f0f23;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.control-group input:focus,
+.control-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.control-group small {
+    display: block;
+    color: #666;
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+.control-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* ==================== 复选框 ==================== */
+.checkbox-group {
+    margin-bottom: 12px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: #e0e0e0;
+    font-size: 14px;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.checkbox-group small {
+    display: block;
+    color: #666;
+    font-size: 11px;
+    margin-top: 5px;
+    margin-left: 28px;
+}
+
+/* ==================== 按钮 ==================== */
+.button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.memos-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.memos-button:hover {
+    transform: translateY(-2px);
+}
+
+.memos-button.primary {
+    background: #667eea;
+    color: white;
+}
+
+.memos-button.primary:hover {
+    background: #5a6fd6;
+}
+
+.memos-button.secondary {
+    background: #3d4f6f;
+    color: #e0e0e0;
+}
+
+.memos-button.secondary:hover {
+    background: #4a5d7f;
+}
+
+.memos-button.success {
+    background: #4CAF50;
+    color: white;
+}
+
+.memos-button.success:hover {
+    background: #45a049;
+}
+
+.memos-button.danger {
+    background: #f44336;
+    color: white;
+}
+
+.memos-button.danger:hover {
+    background: #da190b;
+}
+
+/* ==================== 状态框 ==================== */
+.status-box {
+    padding: 10px 12px;
+    background: #0f0f23;
+    border-radius: 6px;
+    color: #888;
+    font-size: 13px;
+    margin-top: 10px;
+    border-left: 3px solid #666;
+}
+
+.status-box.success {
+    color: #4CAF50;
+    border-left-color: #4CAF50;
+}
+
+.status-box.error {
+    color: #f44336;
+    border-left-color: #f44336;
+}
+
+/* ==================== 统计网格 ==================== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.stat-box {
+    background: #0f0f23;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    color: #888;
+    font-size: 12px;
+}
+
+/* ==================== 帮助文本 ==================== */
+.help-text {
+    color: #b0b0b0;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.help-text p {
+    margin: 0 0 10px 0;
+}
+
+.help-text ol,
+.help-text ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.help-text li {
+    margin-bottom: 6px;
+}
+
+.help-text code {
+    background: #0f0f23;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #e94560;
+    font-size: 12px;
+}
+
+/* ==================== 响应式 ==================== */
+@media (max-width: 600px) {
+    .memos-popup {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .memos-button {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

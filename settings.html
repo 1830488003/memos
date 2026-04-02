@@ -1,0 +1,228 @@
+<!-- MemOS 设置面板 -->
+<div class="memos-popup-header">
+    <h2>MemOS 记忆集成</h2>
+    <span id="memos-update-indicator" style="display:none; color: #f59e0b; font-size: 12px;">✨ 发现新版本!</span>
+    <button id="memos-popup-close" class="memos-close-btn">&times;</button>
+</div>
+
+<div class="memos-popup-body">
+    <div class="author-info">
+        <span>v<span id="memos-current-version">1.0.1</span></span>
+        <span> | 作者: 萧然</span>
+        <button id="memos-check-update" class="memos-button secondary" style="margin-left: 10px; padding: 2px 8px; font-size: 11px;">
+            <i class="fa-solid fa-cloud-arrow-down"></i> 检查更新
+        </button>
+    </div>
+
+    <!-- API配置 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>🔑 API 配置</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="control-group">
+                <label for="memos-api-endpoint">API 端点:</label>
+                <input type="text" id="memos-api-endpoint" 
+                       value="https://memos.memtensor.cn/api/openmem/v1">
+            </div>
+            
+            <div class="control-group">
+                <label for="memos-api-key">API 密钥:</label>
+                <input type="password" id="memos-api-key" placeholder="输入你的 MemOS API Key (mpg-xxx)">
+                <small>从 MemOS Cloud 控制台获取</small>
+            </div>
+            
+            <div class="button-group">
+                <button id="memos-test-connection" class="memos-button secondary">
+                    🔌 测试连接
+                </button>
+                <button id="memos-save-config" class="memos-button success">
+                    💾 保存配置
+                </button>
+                <button id="memos-clear-config" class="memos-button danger">
+                    🗑️ 清除配置
+                </button>
+            </div>
+            
+            <div id="memos-api-status" class="status-box">
+                状态: 未配置
+            </div>
+        </div>
+    </div>
+
+    <!-- 功能开关 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>⚙️ 功能开关</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="memos-enabled" checked>
+                    <span>启用 MemOS 插件</span>
+                </label>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="memos-auto-save" checked>
+                    <span>自动保存对话</span>
+                </label>
+                <small>对话中的消息会自动保存到 MemOS</small>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="memos-auto-retrieve" checked>
+                    <span>自动检索记忆</span>
+                </label>
+                <small>发送消息时自动检索相关记忆并注入</small>
+            </div>
+            
+            <div class="control-group">
+                <label for="memos-retrieve-count">检索数量:</label>
+                <input type="number" id="memos-retrieve-count" value="5" min="1" max="10">
+                <small>每次检索返回的记忆数量 (建议 3-10)</small>
+            </div>
+            
+            <div class="control-group">
+                <label for="memos-relativity-threshold">相关度阈值:</label>
+                <input type="number" id="memos-relativity-threshold" value="0.5" min="0" max="1" step="0.1">
+                <small>过滤低相关度记忆 (0-1，值越高过滤越严格)</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 手动操作 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>🛠️ 手动操作</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="control-group">
+                <label for="memos-manual-content">手动保存内容:</label>
+                <textarea id="memos-manual-content" placeholder="输入要保存到 MemOS 的内容..." rows="3"></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button id="memos-manual-save" class="memos-button primary">
+                    📤 保存到 MemOS
+                </button>
+            </div>
+            
+            <hr style="border-color: #333; margin: 15px 0;">
+            
+            <div class="control-group">
+                <label for="memos-search-query">搜索记忆:</label>
+                <input type="text" id="memos-search-query" placeholder="输入关键词搜索...">
+            </div>
+            
+            <div class="button-group">
+                <button id="memos-search" class="memos-button primary">
+                    🔍 搜索
+                </button>
+                <button id="memos-get-all" class="memos-button secondary">
+                    📋 显示所有
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 记忆注入预览 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>📝 记忆注入预览</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="control-group">
+                <textarea id="memos-injection-preview" rows="6" readonly 
+                          placeholder="检索到的记忆将显示在这里..."></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button id="memos-refresh-injection" class="memos-button primary">
+                    🔄 刷新注入
+                </button>
+                <button id="memos-clear-injection" class="memos-button danger">
+                    🗑️ 清空注入
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>📊 统计信息</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value" id="memos-total-memories">0</div>
+                    <div class="stat-label">记忆总数</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="memos-sessions-saved">0</div>
+                    <div class="stat-label">已保存消息</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="memos-retrieves-count">0</div>
+                    <div class="stat-label">检索次数</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="memos-last-retrieve">从未</div>
+                    <div class="stat-label">最后检索</div>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>最后保存时间:</label>
+                <div id="memos-last-save" style="color: #888;">从未</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="memos-section">
+        <div class="memos-section-header">
+            <h3>📖 使用说明</h3>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="memos-section-content">
+            <div class="help-text">
+                <p><strong>配置步骤：</strong></p>
+                <ol>
+                    <li>在 MemOS Cloud 控制台获取 API Key</li>
+                    <li>填写上述配置并保存</li>
+                    <li>点击"测试连接"验证配置</li>
+                </ol>
+                
+                <p><strong>功能说明：</strong></p>
+                <ul>
+                    <li><strong>自动保存：</strong>对话中的消息会自动保存到 MemOS（用户和AI消息都会保存）</li>
+                    <li><strong>自动检索：</strong>发送用户消息时自动检索相关记忆并注入到回复生成中</li>
+                    <li><strong>手动保存：</strong>手动输入内容保存到 MemOS</li>
+                    <li><strong>相关度阈值：</strong>只显示相关度高于此值的记忆</li>
+                </ul>
+                
+                <p><strong>数据统计：</strong></p>
+                <ul>
+                    <li><strong>记忆总数：</strong>从 API 获取的当前记忆总数</li>
+                    <li><strong>已保存消息：</strong>本地已处理的对话消息数量</li>
+                    <li><strong>检索次数：</strong>手动搜索和自动检索的次数</li>
+                </ul>
+                
+                <p><strong>API 端点：</strong></p>
+                <ul>
+                    <li>搜索: <code>POST /search/memory</code></li>
+                    <li>添加: <code>POST /add/message</code></li>
+                    <li>获取: <code>POST /get/message</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
