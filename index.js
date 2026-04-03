@@ -59,27 +59,71 @@ jQuery(async () => {
         },
 
         async performUpdate() {
-            const { getRequestHeaders } = SillyTavern.getContext().common;
-            const { extensionTypes } = SillyTavern.getContext().extensions;
+            // 确保 SillyTavern 已初始化
+            if (!SillyTavern || !SillyTavern.getContext) {
+                console.error(`[${extensionName}] SillyTavern 未初始化`);
+                toastr.error('系统未就绪，请稍后重试');
+                return;
+            }
+            
+            const context = SillyTavern.getContext();
+            if (!context || !context.common) {
+                console.error(`[${extensionName}] SillyTavern.getContext() 返回无效`);
+                toastr.error('系统未就绪，请稍后重试');
+                return;
+            }
+            
+            const { getRequestHeaders } = context.common;
             toastr.info('正在开始更新...');
+            console.log(`[${extensionName}] 开始更新`);
+            
             try {
-                // 使用 extensionTypes 获取扩展类型（与 JS-Slash-Runner 一致）
-                const extensionType = Object.keys(extensionTypes).find(key => key.endsWith(extensionName));
-                const isGlobal = extensionType && extensionTypes[extensionType] === 'global';
-                
+                // 直接调用更新 API，不传递 global 参数让后端自动判断
                 const response = await fetch('/api/extensions/update', {
                     method: 'POST',
                     headers: getRequestHeaders(),
                     body: JSON.stringify({
                         extensionName: extensionName,
-                        global: isGlobal,
                     }),
                 });
-                if (!response.ok) throw new Error(await response.text());
+                
+                const result = await response.text();
+                console.log(`[${extensionName}] 更新API响应状态:`, response.status);
+                console.log(`[${extensionName}] 更新API响应内容:`, result);
+                
+                // 尝试解析JSON响应
+                let resultObj;
+                try {
+                    resultObj = JSON.parse(result);
+                    console.log(`[${extensionName}] 解析后的响应:`, resultObj);
+                } catch {
+                    resultObj = { message: result };
+                }
+                
+                if (!response.ok) {
+                    throw new Error(resultObj.message || `HTTP ${response.status}: ${result}`);
+                }
 
-                toastr.success('更新成功！将在3秒后刷新页面应用更改。');
-                setTimeout(() => location.reload(), 3000);
+                // 检查响应内容判断是否成功
+                const isSuccess = response.ok && (
+                    resultObj.ok === true || 
+                    resultObj.success === true ||
+                    (typeof resultObj === 'string' && resultObj.includes('success'))
+                );
+                
+                if (isSuccess || response.status === 200) {
+                    toastr.success('更新成功！正在刷新页面...');
+                    console.log(`[${extensionName}] 更新成功，准备刷新页面`);
+                    // 强制刷新，不等待
+                    setTimeout(() => {
+                        console.log(`[${extensionName}] 执行页面刷新`);
+                        window.location.reload(true);
+                    }, 1000);
+                } else {
+                    throw new Error(resultObj.message || resultObj.error || '更新失败');
+                }
             } catch (error) {
+                console.error(`[${extensionName}] 更新失败:`, error);
                 toastr.error(`更新失败: ${error.message}`);
             }
         },
@@ -88,7 +132,7 @@ jQuery(async () => {
             if (
                 await SillyTavern.callGenericPopup(
                     `发现新版本 ${this.latestVersion}！您想现在更新吗？`,
-                    'confirm',
+                    SillyTavern.GENERIC_POPUP_TYPES.confirm,
                     {
                         okButton: '立即更新',
                         cancelButton: '稍后',
@@ -100,11 +144,13 @@ jQuery(async () => {
         },
 
         async checkForUpdates(isManual = false) {
-            const $updateButton = jQuery('#memos-check-update');
+            const $checkButton = jQuery('#memos-check-update');
+            const $updateGuide = jQuery('#memos-update-guide');
+            const $newVersionDisplay = jQuery('#memos-new-version-display');
             const $updateIndicator = jQuery('.update-indicator');
 
             if (isManual) {
-                $updateButton
+                $checkButton
                     .prop('disabled', true)
                     .html('<i class="fas fa-spinner fa-spin"></i> 检查中...');
             }
@@ -128,18 +174,17 @@ jQuery(async () => {
                     ) > 0
                 ) {
                     $updateIndicator.show();
-                    $updateButton
-                        .html(
-                            `<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`,
-                        )
-                        .off('click')
-                        .on('click', () => this.showUpdateConfirmDialog());
+                    // 显示手动更新指南
+                    $newVersionDisplay.text(this.latestVersion);
+                    $updateGuide.show();
+                    
                     if (isManual)
-                        toastr.success(
-                            `发现新版本 ${this.latestVersion}！点击按钮进行更新。`,
+                        toastr.warning(
+                            `发现新版本 ${this.latestVersion}！请查看下方手动更新步骤。`,
                         );
                 } else {
                     $updateIndicator.hide();
+                    $updateGuide.hide();
                     if (isManual) toastr.info('您当前已是最新版本。');
                 }
             } catch (error) {
@@ -152,7 +197,7 @@ jQuery(async () => {
                         this.currentVersion,
                     ) <= 0
                 ) {
-                    $updateButton
+                    $checkButton
                         .prop('disabled', false)
                         .html(
                             '<i class="fa-solid fa-cloud-arrow-down"></i> 检查更新',
@@ -1617,6 +1662,7 @@ jQuery(async () => {
 
         // 更新器事件绑定
         jQuery('#memos-check-update').on('click', () => Updater.checkForUpdates(true))
+        jQuery('#memos-update-now').on('click', () => Updater.performUpdate())
 
         // 自动静默检查更新（5秒后执行）
         setTimeout(() => {
