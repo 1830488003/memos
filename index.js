@@ -14,18 +14,17 @@ jQuery(async () => {
 
     // --- 扩展配置 ---
     const extensionName = "memos"
-    const extensionFolderPath = `/scripts/extensions/third-party/${extensionName}`
+    const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`
     const DEBUG_MODE = true
 
     // ===================================================================================
-    // 0. 更新器模块（完全复制自 real-time-status-bar）
+    // 0. 更新器模块
     // ===================================================================================
     const Updater = {
         gitRepoOwner: '1830488003',
         gitRepoName: 'memos',
-        currentVersion: '1.0.1',
+        currentVersion: '1.0.0',
         latestVersion: '0.0.0',
-        changelogContent: '',
 
         async fetchRawFileFromGitHub(filePath) {
             const url = `https://raw.githubusercontent.com/${this.gitRepoOwner}/${this.gitRepoName}/main/${filePath}`;
@@ -42,10 +41,7 @@ jQuery(async () => {
             try {
                 return JSON.parse(content).version || '0.0.0';
             } catch (error) {
-                console.error(
-                    `[${extensionName}] Failed to parse version:`,
-                    error,
-                );
+                console.error(`[${extensionName}] Failed to parse version:`, error);
                 return '0.0.0';
             }
         },
@@ -84,9 +80,24 @@ jQuery(async () => {
             }
         },
 
+        async showUpdateConfirmDialog() {
+            if (
+                await SillyTavern.callGenericPopup(
+                    `发现新版本 ${this.latestVersion}！您想现在更新吗？`,
+                    'confirm',
+                    {
+                        okButton: '立即更新',
+                        cancelButton: '稍后',
+                    },
+                )
+            ) {
+                await this.performUpdate();
+            }
+        },
+
         async checkForUpdates(isManual = false) {
-            const $updateButton = $('#memos-check-update');
-            const $updateIndicator = $('#memos-update-indicator');
+            const $updateButton = jQuery('#memos-check-update');
+            const $updateIndicator = jQuery('.update-indicator');
 
             if (isManual) {
                 $updateButton
@@ -96,11 +107,11 @@ jQuery(async () => {
             try {
                 const localManifestText = await (
                     await fetch(
-                        `${extensionFolderPath}/manifest.json?t=${Date.now()}`,
+                        `/${extensionFolderPath}/manifest.json?t=${Date.now()}`,
                     )
                 ).text();
                 this.currentVersion = this.parseVersion(localManifestText);
-                $('#memos-current-version').text(this.currentVersion);
+                jQuery('#memos-current-version').text(this.currentVersion);
 
                 const remoteManifestText =
                     await this.fetchRawFileFromGitHub('manifest.json');
@@ -118,7 +129,7 @@ jQuery(async () => {
                             `<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`,
                         )
                         .off('click')
-                        .on('click', () => this.performUpdate());
+                        .on('click', () => this.showUpdateConfirmDialog());
                     if (isManual)
                         toastr.success(
                             `发现新版本 ${this.latestVersion}！点击按钮进行更新。`,
@@ -146,7 +157,6 @@ jQuery(async () => {
             }
         },
     };
-
     // 存储键
     const STORAGE_KEY_API_CONFIG = "memos_api_config"
     const STORAGE_KEY_SETTINGS = "memos_settings"
@@ -1656,9 +1666,6 @@ jQuery(async () => {
         $popupInstance.find("#memos-refresh-injection").on("click", refreshInjection)
         $popupInstance.find("#memos-clear-injection").on("click", clearInjection)
 
-        // 检查更新按钮
-        $popupInstance.find("#memos-check-update").on("click", () => Updater.checkForUpdates(true))
-
         logDebug("事件绑定完成")
     }
 
@@ -1696,6 +1703,9 @@ jQuery(async () => {
         createFloatingButton()
         setupAutoInjection()
         registerEventListeners()  // 注册事件监听器
+
+        // 更新器事件绑定
+        jQuery('#memos-check-update').on('click', () => Updater.checkForUpdates(true))
 
         // 自动静默检查更新（5秒后执行）
         setTimeout(() => {
