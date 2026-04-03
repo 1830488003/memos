@@ -363,15 +363,6 @@ jQuery(async () => {
     // 加载已保存的消息ID列表（从localStorage）
     function loadSavedMessageIds() {
         try {
-            // 检查版本，如果版本不匹配则清理旧数据
-            const savedVersion = localStorage.getItem(STORAGE_KEY_SAVED_MESSAGES_VERSION)
-            if (savedVersion !== SAVED_VERSION) {
-                logDebug(`版本不匹配(${savedVersion} -> ${SAVED_VERSION})，清理旧数据`)
-                localStorage.removeItem(STORAGE_KEY_SAVED_MESSAGES)
-                localStorage.setItem(STORAGE_KEY_SAVED_MESSAGES_VERSION, SAVED_VERSION)
-                return
-            }
-
             const saved = localStorage.getItem(STORAGE_KEY_SAVED_MESSAGES)
             if (saved) {
                 const parsed = JSON.parse(saved)
@@ -379,6 +370,8 @@ jQuery(async () => {
                     savedMessageIds = new Set(parsed)
                     logDebug(`已加载 ${savedMessageIds.size} 条已保存的消息ID`)
                 }
+            } else {
+                logDebug("没有已保存的消息ID记录")
             }
         } catch (e) {
             logError("加载已保存消息ID失败:", e)
@@ -422,10 +415,9 @@ jQuery(async () => {
     // 标记消息已保存
     function markMessageSaved(msgId) {
         savedMessageIds.add(msgId)
-        // 每添加10条保存一次
-        if (savedMessageIds.size % 10 === 0) {
-            persistSavedMessageIds()
-        }
+        // 每次都保存，确保不丢失
+        persistSavedMessageIds()
+        logDebug(`已保存消息ID: ${msgId}，当前列表大小: ${savedMessageIds.size}`)
     }
 
     // 调试日志
