@@ -436,6 +436,12 @@ jQuery(async () => {
                 return
             }
 
+            // 如果尚未初始化完成，跳过（防止打开角色卡时误触发）
+            if (!isInitialized) {
+                logDebug("跳过：初始化尚未完成")
+                return
+            }
+
             // 获取刚发送的消息
             try {
                 const messages = await TavernHelper.getChatMessages("0-last", { include_swipes: false })
@@ -445,10 +451,13 @@ jQuery(async () => {
                 const content = lastMsg.message || lastMsg.content || lastMsg.mes || ""
                 const isUser = lastMsg.is_user === true || lastMsg.role === "user"
 
+                // 确认是用户发言
                 if (!isUser || !content || !content.trim()) {
-                    logDebug("最后一条消息不是用户消息或内容为空")
+                    logDebug("最后一条消息不是用户消息或内容为空，跳过检索")
                     return
                 }
+
+                logDebug(`MESSAGE_SENT：用户消息 "${content.substring(0, 30)}..."`)
 
                 // 检查API配置
                 if (!memosConfig.apiKey) {
@@ -456,8 +465,40 @@ jQuery(async () => {
                     return
                 }
 
-                logDebug("MESSAGE_SENT：用户消息，检索记忆...")
+                // 检查检索间隔（10秒）
+                const now = Date.now()
+                const retrieveElapsed = now - lastRetrieveTimeForInterval
+                if (retrieveElapsed < 10000) {
+                    logDebug(`检索间隔未满10秒(${retrieveElapsed}ms)，跳过检索`)
+                    return
+                }
+
+                logDebug("MESSAGE_SENT：检索记忆...")
                 isInjectingMemory = true
+                lastRetrieveTimeForInterval = now
+
+                // 先停止生成（如果有正在生成的对话）
+                try {
+                    const parentWin = window.parent
+                    // 使用酒馆API停止生成
+                    if (parentWin.SillyTavern && typeof parentWin.SillyTavern.stopGeneration === "function") {
+                        const stopped = parentWin.SillyTavern.stopGeneration()
+                        logDebug(`停止生成: ${stopped ? "成功" : "无需停止或已停止"}`)
+                    }
+                    // 备用：使用 /stop 命令
+                    if (parentWin.TavernHelper && typeof parentWin.TavernHelper.triggerSlash === "function") {
+                        try {
+                            await parentWin.TavernHelper.triggerSlash("/stop")
+                            logDebug("已发送 /stop 命令")
+                        } catch (e) {
+                            logDebug("/stop 命令执行失败:", e)
+                        }
+                    }
+                    // 等待停止生效
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                } catch (e) {
+                    logDebug("停止生成失败:", e)
+                }
 
                 // 检索记忆
                 const result = await searchMemory(content, memosSettings.retrieveCount)
@@ -468,8 +509,40 @@ jQuery(async () => {
                     await injectMemoryToPrompt(result.memories, result.preferences)
                     logDebug("记忆注入成功")
                     showToastr("info", `已注入 ${result.memories.length} 条记忆`)
+                    
+                    // 注入完成后，等待1秒让消息楼层稳定，然后触发生成
+                    setTimeout(async () => {
+                        logDebug("记忆注入完成，触发生成...")
+                        try {
+                            const parentWin = window.parent
+                            const sendBtn = parentWin.document?.querySelector('#send_but, #gen_button')
+                                || document.querySelector('#send_but, #gen_button')
+                            if (sendBtn) {
+                                sendBtn.click()
+                                logDebug("已点击生成按钮")
+                            } else if (typeof parentWin.sendTextareaMessage === "function") {
+                                parentWin.sendTextareaMessage()
+                            }
+                        } catch (e) {
+                            logError("触发生成失败:", e)
+                        }
+                    }, 1000)
                 } else {
-                    logDebug("未检索到相关记忆")
+                    logDebug("未检索到相关记忆，仍触发生成...")
+                    setTimeout(async () => {
+                        try {
+                            const parentWin = window.parent
+                            const sendBtn = parentWin.document?.querySelector('#send_but, #gen_button')
+                                || document.querySelector('#send_but, #gen_button')
+                            if (sendBtn) {
+                                sendBtn.click()
+                            } else if (typeof parentWin.sendTextareaMessage === "function") {
+                                parentWin.sendTextareaMessage()
+                            }
+                        } catch (e) {
+                            logError("触发生成失败:", e)
+                        }
+                    }, 1000)
                 }
 
                 isInjectingMemory = false
@@ -1203,6 +1276,14 @@ jQuery(async () => {
         // 记录已处理的消息索引，防止重复处理（仅用于运行时去重）
         let processedMessageIndices = new Set()
 
+        // 酒馆API的 getLastMessageId 返回从0开始的索引，不是消息数量
+        // 例如：有6条消息时，返回5（第6条消息的索引）
+        // 所以使用返回值时需要+1来得到正确的消息数量
+        function getMessageCount() {
+            const rawIndex = TavernHelper.getLastMessageId()
+            return rawIndex + 1  // +1 将索引转换为消息数量
+        }
+
         async function checkForNewMessage() {
             try {
                 // 如果正在初始化中，跳过本次轮询
@@ -1217,7 +1298,8 @@ jQuery(async () => {
                     return
                 }
 
-                const currentCount = TavernHelper.getLastMessageId()  // 返回值就是楼层索引（从0开始）
+                const currentCount = getMessageCount()  // 获取修正后的消息数量（+1）
+                const rawIndex = TavernHelper.getLastMessageId()  // 保留原始索引用于日志
 
                 // 首次运行，初始化
                 if (lastMessageId === null && !isInitialized) {
@@ -1391,12 +1473,38 @@ jQuery(async () => {
                             // 检查检索间隔（10秒）
                             const now = Date.now()
                             const retrieveElapsed = now - lastRetrieveTimeForInterval
+                            
+                            // 用户消息已确认是 isUser && msg.role === "user"，直接检查间隔即可
                             if (retrieveElapsed < 10000) {
                                 logDebug(`检索间隔未满10秒(${retrieveElapsed}ms)，跳过检索`)
                             } else {
                                 lastRetrieveTimeForInterval = now
                                 // 检索记忆并注入
                                 logDebug("用户消息，检索记忆...")
+                                
+                                // 先停止生成（如果有正在生成的对话）
+                                try {
+                                    const parentWin = window.parent
+                                    // 使用酒馆API停止生成
+                                    if (parentWin.SillyTavern && typeof parentWin.SillyTavern.stopGeneration === "function") {
+                                        const stopped = parentWin.SillyTavern.stopGeneration()
+                                        logDebug(`停止生成: ${stopped ? "成功" : "无需停止或已停止"}`)
+                                    }
+                                    // 备用：使用 /stop 命令
+                                    if (parentWin.TavernHelper && typeof parentWin.TavernHelper.triggerSlash === "function") {
+                                        try {
+                                            await parentWin.TavernHelper.triggerSlash("/stop")
+                                            logDebug("已发送 /stop 命令")
+                                        } catch (e) {
+                                            logDebug("/stop 命令执行失败:", e)
+                                        }
+                                    }
+                                    // 等待停止生效
+                                    await new Promise(resolve => setTimeout(resolve, 500))
+                                } catch (e) {
+                                    logDebug("停止生成失败:", e)
+                                }
+                                
                                 try {
                                     const result = await searchMemory(content, memosSettings.retrieveCount)
                                     logDebug("检索结果:", result)
@@ -1406,89 +1514,64 @@ jQuery(async () => {
                                         logDebug("记忆注入成功")
                                         showToastr("info", `已注入 ${result.memories.length} 条记忆`)
                                         
-                                        // 注入完成后，等待1.5秒让消息楼层稳定，然后再次触发发送
+                                        // 注入完成后，等待1秒让消息楼层稳定，然后触发生成
                                         setTimeout(async () => {
-                                            logDebug("等待后再次触发发送...")
+                                            logDebug("记忆注入完成，触发生成...")
                                             try {
                                                 const parentWin = window.parent
-                                                logDebug("sendTextareaMessage函数是否存在:", typeof parentWin.sendTextareaMessage)
-                                                if (typeof parentWin.sendTextareaMessage === "function") {
-                                                    await parentWin.sendTextareaMessage()
-                                                    logDebug("已触发第二次发送")
-                                                } else {
-                                                    logDebug("sendTextareaMessage函数不可用，尝试点击发送按钮")
-                                                    
-                                                    // 先尝试从当前文档获取（iframe 内）
-                                                    let sendBtn = document.querySelector('#send_but')
-                                                    
-                                                    // 再尝试从父窗口获取
-                                                    if (!sendBtn && window.parent) {
-                                                        try {
-                                                            sendBtn = window.parent.document.querySelector('#send_but')
-                                                            logDebug("从父窗口获取到发送按钮")
-                                                        } catch (e) {
-                                                            logError("父窗口访问失败:", e)
-                                                        }
-                                                    }
-                                                    
-                                                    if (sendBtn) {
-                                                        sendBtn.click()
-                                                        logDebug("已点击发送按钮 #send_but")
-                                                    } else {
-                                                        logError("未找到发送按钮，尝试 Enter 键...")
-                                                        // 备用：模拟 Enter 键
-                                                        try {
-                                                            const input = document.querySelector('#send_message_input, #mes_input, textarea') 
-                                                                || window.parent?.document?.querySelector('#send_message_input, #mes_input, textarea')
-                                                            if (input) {
-                                                                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }))
-                                                                logDebug("已触发 Enter 键")
-                                                            }
-                                                        } catch (e) {
-                                                            logError("Enter 键失败:", e)
-                                                        }
-                                                    }
-                                                }
-                                            } catch (e) {
-                                                logError("触发第二次发送失败:", e)
-                                            }
-                                        }, 1500)
-                                    } else {
-                                        // 即使没有检索到记忆，也要触发发送（用于训练新记忆）
-                                        logDebug("未检索到相关记忆，但仍触发发送（用于训练记忆）")
-                                        // 立即触发发送
-                                        setTimeout(async () => {
-                                            logDebug("无记忆模式下触发发送...")
-                                            try {
-                                                const sendBtn = document.querySelector('#send_but') 
-                                                    || window.parent?.document?.querySelector('#send_but')
+                                                // 尝试触发生成
+                                                const sendBtn = parentWin.document?.querySelector('#send_but, #gen_button')
+                                                    || document.querySelector('#send_but, #gen_button')
                                                 if (sendBtn) {
                                                     sendBtn.click()
-                                                    logDebug("已点击发送按钮 #send_but")
+                                                    logDebug("已点击生成按钮")
                                                 } else {
-                                                    logError("未找到发送按钮")
+                                                    logError("未找到生成按钮，尝试 sendTextareaMessage")
+                                                    if (typeof parentWin.sendTextareaMessage === "function") {
+                                                        parentWin.sendTextareaMessage()
+                                                    }
                                                 }
                                             } catch (e) {
-                                                logError("触发发送失败:", e)
+                                                logError("触发生成失败:", e)
                                             }
-                                        }, 1500)
+                                        }, 1000)
+                                    } else {
+                                        // 即使没有检索到记忆，也要触发生成（用于训练新记忆）
+                                        logDebug("未检索到相关记忆，仍触发生成（用于训练记忆）")
+                                        setTimeout(async () => {
+                                            try {
+                                                const parentWin = window.parent
+                                                const sendBtn = parentWin.document?.querySelector('#send_but, #gen_button')
+                                                    || document.querySelector('#send_but, #gen_button')
+                                                if (sendBtn) {
+                                                    sendBtn.click()
+                                                    logDebug("已点击生成按钮（无记忆模式）")
+                                                } else if (typeof parentWin.sendTextareaMessage === "function") {
+                                                    parentWin.sendTextareaMessage()
+                                                }
+                                            } catch (e) {
+                                                logError("触发生成失败:", e)
+                                            }
+                                        }, 1000)
                                     }
                                 } catch (e) {
                                     logError("检索失败:", e)
-                                    // 检索失败时也触发发送
-                                    logDebug("检索失败，尝试触发发送...")
+                                    // 检索失败时也触发生成
+                                    logDebug("检索失败，触发生成...")
                                     setTimeout(async () => {
                                         try {
-                                            const sendBtn = document.querySelector('#send_but') 
-                                                || window.parent?.document?.querySelector('#send_but')
+                                            const parentWin = window.parent
+                                            const sendBtn = parentWin.document?.querySelector('#send_but, #gen_button')
+                                                || document.querySelector('#send_but, #gen_button')
                                             if (sendBtn) {
                                                 sendBtn.click()
-                                                logDebug("已点击发送按钮")
+                                            } else if (typeof parentWin.sendTextareaMessage === "function") {
+                                                parentWin.sendTextareaMessage()
                                             }
                                         } catch (err) {
-                                            logError("触发发送失败:", err)
+                                            logError("触发生成失败:", err)
                                         }
-                                    }, 1500)
+                                    }, 1000)
                                 }
                             }
                         }
