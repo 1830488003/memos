@@ -60,15 +60,19 @@ jQuery(async () => {
 
         async performUpdate() {
             const { getRequestHeaders } = SillyTavern.getContext().common;
-            const { extension_types } = SillyTavern.getContext().extensions;
+            const { extensionTypes } = SillyTavern.getContext().extensions;
             toastr.info('正在开始更新...');
             try {
+                // 使用 extensionTypes 获取扩展类型（与 JS-Slash-Runner 一致）
+                const extensionType = Object.keys(extensionTypes).find(key => key.endsWith(extensionName));
+                const isGlobal = extensionType && extensionTypes[extensionType] === 'global';
+                
                 const response = await fetch('/api/extensions/update', {
                     method: 'POST',
                     headers: getRequestHeaders(),
                     body: JSON.stringify({
                         extensionName: extensionName,
-                        global: extension_types[extensionName] === 'global',
+                        global: isGlobal,
                     }),
                 });
                 if (!response.ok) throw new Error(await response.text());
@@ -186,7 +190,6 @@ jQuery(async () => {
     let sessionsSaved = 0
     let totalRetrieves = 0      // 总检索次数
     let currentInjectionId = "memos_memory_injection"
-    let $popupInstance = null
     let lastUserMessageId = -1
     let isGenerating = false
     let isInjectingMemory = false  // 标记是否正在注入记忆
@@ -963,7 +966,7 @@ jQuery(async () => {
 
     // 手动保存
     async function manualSave() {
-        const content = $popupInstance ? $popupInstance.find("#memos-manual-content").val() : ""
+        const content = jQuery("#memos-manual-content").val() || ""
         if (!content || !content.trim()) {
             showToastr("warning", "请输入内容")
             return
@@ -972,9 +975,7 @@ jQuery(async () => {
         try {
             await addMessage("user", content.trim())
             showToastr("success", "已保存")
-            if ($popupInstance) {
-                $popupInstance.find("#memos-manual-content").val("")
-            }
+            jQuery("#memos-manual-content").val("")
             updateStatsDisplay()
         } catch (e) {
             showToastr("error", `保存失败: ${e.message}`)
@@ -983,7 +984,7 @@ jQuery(async () => {
 
     // 搜索记忆
     async function searchMemories() {
-        const query = $popupInstance ? $popupInstance.find("#memos-search-query").val() : ""
+        const query = jQuery("#memos-search-query").val() || ""
         if (!query || !query.trim()) {
             showToastr("warning", "请输入关键词")
             return
@@ -993,9 +994,7 @@ jQuery(async () => {
             const result = await searchMemory(query.trim(), memosSettings.retrieveCount)
             if (result) {
                 const preview = formatInjectionContext(result.memories, result.preferences)
-                if ($popupInstance) {
-                    $popupInstance.find("#memos-injection-preview").val(preview)
-                }
+                jQuery("#memos-injection-preview").val(preview)
                 showToastr("success", `找到 ${result.memories.length} 条记忆`)
             } else {
                 showToastr("info", "未找到相关记忆")
@@ -1015,9 +1014,7 @@ jQuery(async () => {
                     const content = m.content || m.message || ""
                     preview += `${i + 1}. [${m.role || 'unknown'}] ${content}\n`
                 })
-                if ($popupInstance) {
-                    $popupInstance.find("#memos-injection-preview").val(preview)
-                }
+                jQuery("#memos-injection-preview").val(preview)
                 showToastr("success", `加载了 ${result.messages.length} 条记忆`)
             } else {
                 showToastr("info", "暂无记忆")
@@ -1038,9 +1035,7 @@ jQuery(async () => {
                 const result = await searchMemory(content, memosSettings.retrieveCount)
                 if (result && (result.memories.length > 0 || (result.preferences && result.preferences.length > 0))) {
                     const context = formatInjectionContext(result.memories, result.preferences)
-                    if ($popupInstance) {
-                        $popupInstance.find("#memos-injection-preview").val(context)
-                    }
+                    jQuery("#memos-injection-preview").val(context)
                     // 自动注入
                     await injectMemoryToPrompt(result.memories, result.preferences)
                     showToastr("success", "记忆已注入到prompt")
@@ -1057,9 +1052,7 @@ jQuery(async () => {
     // 清空注入
     async function clearInjection() {
         await removeInjection()
-        if ($popupInstance) {
-            $popupInstance.find("#memos-injection-preview").val("")
-        }
+        jQuery("#memos-injection-preview").val("")
         showToastr("info", "已清空注入")
     }
 
@@ -1112,8 +1105,7 @@ jQuery(async () => {
 
     // 更新API状态
     function updateApiStatus(status, success) {
-        if (!$popupInstance) return
-        const $status = $popupInstance.find("#memos-api-status")
+        const $status = jQuery("#memos-api-status")
         $status.text(status)
         $status.removeClass("success error")
         if (success === true) $status.addClass("success")
@@ -1122,12 +1114,11 @@ jQuery(async () => {
 
     // 更新统计
     function updateStatsDisplay() {
-        if (!$popupInstance) return
-        $popupInstance.find("#memos-total-memories").text(totalMemories)
-        $popupInstance.find("#memos-sessions-saved").text(savedMessageIds.size)
-        $popupInstance.find("#memos-retrieves-count").text(totalRetrieves)
-        $popupInstance.find("#memos-last-retrieve").text(lastRetrieveTime ? formatTime(lastRetrieveTime) : "从未")
-        $popupInstance.find("#memos-last-save").text(lastAddTime ? formatTime(lastAddTime) : "从未")
+        jQuery("#memos-total-memories").text(totalMemories)
+        jQuery("#memos-sessions-saved").text(savedMessageIds.size)
+        jQuery("#memos-retrieves-count").text(totalRetrieves)
+        jQuery("#memos-last-retrieve").text(lastRetrieveTime ? formatTime(lastRetrieveTime) : "从未")
+        jQuery("#memos-last-save").text(lastAddTime ? formatTime(lastAddTime) : "从未")
     }
     
     // 格式化时间
@@ -1500,132 +1491,21 @@ jQuery(async () => {
         setTimeout(checkForNewMessage, 1000)
     }
 
-    // 创建悬浮按钮
-    function createFloatingButton() {
-        if (jQuery("#memos-float-button").length > 0) return
-
-        const buttonHtml = `<div id="memos-float-button" title="MemOS">🧠</div>`
-        jQuery("body").append(buttonHtml)
-        const $button = jQuery("#memos-float-button")
-
-        $button.css({
-            position: "fixed",
-            top: "150px",
-            right: "20px",
-            width: "40px",
-            height: "40px",
-            "background-color": "#4f46e5",
-            "border-radius": "50%",
-            display: "flex",
-            "align-items": "center",
-            "justify-content": "center",
-            cursor: "pointer",
-            "z-index": "99999",
-            "box-shadow": "0 2px 8px rgba(0,0,0,0.3)",
-            "font-size": "20px",
-            transition: "transform 0.2s"
-        })
-
-        $button.hover(
-            function() { jQuery(this).css({ transform: "scale(1.1)" }) },
-            function() { jQuery(this).css({ transform: "scale(1)" }) }
-        )
-
-        $button.on("click", loadSettingsPopup)
-    }
-
-    // 加载设置弹窗
-    async function loadSettingsPopup() {
-        logDebug("loadSettingsPopup 被调用")
-        
-        if ($popupInstance) {
-            logDebug("弹窗已存在，直接显示")
-            $popupInstance.show()
-            jQuery(".memos-popup-overlay").show()
-            return
-        }
-
-        try {
-            logDebug("开始加载settings.html, 路径:", `${extensionFolderPath}/settings.html`)
-            const response = await fetch(`${extensionFolderPath}/settings.html`)
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`)
-            }
-            
-            const html = await response.text()
-            logDebug("HTML加载成功，长度:", html.length)
-            
-            // 创建弹窗 - 添加 memos-popup 类以应用样式
-            jQuery("body").append(`<div class="memos-popup-overlay" style="display:block;"></div>`)
-            jQuery("body").append(`<div id="memos-popup-container" class="memos-popup" style="display:block;">${html}</div>`)
-            
-            $popupInstance = jQuery("#memos-popup-container")
-            const $overlay = jQuery(".memos-popup-overlay")
-
-            const closePopup = () => {
-                $popupInstance.hide()
-                $overlay.hide()
-            }
-
-            $popupInstance.find("#memos-popup-close").on("click", closePopup)
-            $overlay.on("click", closePopup)
-
-            // 检查draggable是否可用
-            if (jQuery.fn.draggable) {
-                $popupInstance.draggable({ handle: ".memos-popup-header" })
-            }
-
-            bindPopupEventHandlers()
-            loadSettingsToUI()
-            updateStatsDisplay()
-
-            logDebug("弹窗创建成功")
-            showToastr("success", "MemOS设置已加载")
-        } catch (e) {
-            logError("加载设置失败:", e)
-            showToastr("error", `加载设置失败: ${e.message}`)
-        }
-    }
-
-    // 加载设置到UI
-    function loadSettingsToUI() {
-        if (!$popupInstance) return
-        $popupInstance.find("#memos-api-endpoint").val(memosConfig.apiEndpoint)
-        $popupInstance.find("#memos-api-key").val(memosConfig.apiKey)
-        $popupInstance.find("#memos-enabled").prop("checked", memosSettings.enabled)
-        $popupInstance.find("#memos-auto-save").prop("checked", memosSettings.autoSave)
-        $popupInstance.find("#memos-auto-retrieve").prop("checked", memosSettings.autoRetrieve)
-        $popupInstance.find("#memos-retrieve-count").val(memosSettings.retrieveCount)
-        $popupInstance.find("#memos-relativity-threshold").val(memosSettings.relativityThreshold || 0.5)
-    }
-
-    // 绑定事件
-    function bindPopupEventHandlers() {
-        if (!$popupInstance) return
-
-        // 折叠
-        $popupInstance.on("click", ".memos-section-header", function() {
-            const $section = jQuery(this).closest(".memos-section")
-            const $content = $section.find(".memos-section-content")
-            $section.toggleClass("collapsed")
-            $content.slideToggle(200)
-        })
-
+    // 绑定设置面板事件
+    function bindSettingsEvents() {
         // 测试连接
-        $popupInstance.find("#memos-test-connection").on("click", testConnection)
+        jQuery("#memos-test-connection").on("click", testConnection)
 
         // 保存配置
-        $popupInstance.find("#memos-save-config").on("click", function() {
-            memosConfig.apiEndpoint = $popupInstance.find("#memos-api-endpoint").val().trim()
-            memosConfig.apiKey = $popupInstance.find("#memos-api-key").val().trim()
-            
+        jQuery("#memos-save-config").on("click", function() {
+            memosConfig.apiEndpoint = jQuery("#memos-api-endpoint").val().trim()
+            memosConfig.apiKey = jQuery("#memos-api-key").val().trim()
             saveSettings()
             showToastr("success", "配置已保存")
         })
 
         // 清除配置
-        $popupInstance.find("#memos-clear-config").on("click", function() {
+        jQuery("#memos-clear-config").on("click", function() {
             memosConfig = { ...DEFAULT_CONFIG }
             loadSettingsToUI()
             localStorage.removeItem(STORAGE_KEY_API_CONFIG)
@@ -1633,40 +1513,51 @@ jQuery(async () => {
         })
 
         // 开关
-        $popupInstance.find("#memos-enabled").on("change", function() {
+        jQuery("#memos-enabled").on("change", function() {
             memosSettings.enabled = jQuery(this).is(":checked")
             saveSettings()
         })
 
-        $popupInstance.find("#memos-auto-save").on("change", function() {
+        jQuery("#memos-auto-save").on("change", function() {
             memosSettings.autoSave = jQuery(this).is(":checked")
             saveSettings()
         })
 
-        $popupInstance.find("#memos-auto-retrieve").on("change", function() {
+        jQuery("#memos-auto-retrieve").on("change", function() {
             memosSettings.autoRetrieve = jQuery(this).is(":checked")
             saveSettings()
         })
 
-        $popupInstance.find("#memos-retrieve-count").on("change", function() {
+        jQuery("#memos-retrieve-count").on("change", function() {
             memosSettings.retrieveCount = parseInt(jQuery(this).val()) || 5
             saveSettings()
         })
 
-        $popupInstance.find("#memos-relativity-threshold").on("change", function() {
+        jQuery("#memos-relativity-threshold").on("change", function() {
             memosSettings.relativityThreshold = parseFloat(jQuery(this).val()) || 0.5
             saveSettings()
         })
 
         // 按钮
-        $popupInstance.find("#memos-manual-save").on("click", manualSave)
-        $popupInstance.find("#memos-save-current-chat").on("click", saveCurrentChat)
-        $popupInstance.find("#memos-search").on("click", searchMemories)
-        $popupInstance.find("#memos-get-all").on("click", showAllMemories)
-        $popupInstance.find("#memos-refresh-injection").on("click", refreshInjection)
-        $popupInstance.find("#memos-clear-injection").on("click", clearInjection)
+        jQuery("#memos-manual-save").on("click", manualSave)
+        jQuery("#memos-save-current-chat").on("click", saveCurrentChat)
+        jQuery("#memos-search").on("click", searchMemories)
+        jQuery("#memos-get-all").on("click", showAllMemories)
+        jQuery("#memos-refresh-injection").on("click", refreshInjection)
+        jQuery("#memos-clear-injection").on("click", clearInjection)
 
-        logDebug("事件绑定完成")
+        logDebug("设置面板事件绑定完成")
+    }
+
+    // 加载设置到UI
+    function loadSettingsToUI() {
+        jQuery("#memos-api-endpoint").val(memosConfig.apiEndpoint)
+        jQuery("#memos-api-key").val(memosConfig.apiKey)
+        jQuery("#memos-enabled").prop("checked", memosSettings.enabled)
+        jQuery("#memos-auto-save").prop("checked", memosSettings.autoSave)
+        jQuery("#memos-auto-retrieve").prop("checked", memosSettings.autoRetrieve)
+        jQuery("#memos-retrieve-count").val(memosSettings.retrieveCount)
+        jQuery("#memos-relativity-threshold").val(memosSettings.relativityThreshold || 0.5)
     }
 
     // 初始化
@@ -1682,6 +1573,24 @@ jQuery(async () => {
             return
         }
 
+        // 1. 动态加载 settings.html 到扩展菜单容器
+        try {
+            const settingsHtml = await jQuery.get(`${extensionFolderPath}/settings.html`);
+            jQuery('#extensions_settings2').append(settingsHtml);
+            logDebug("settings.html 已加载到扩展菜单");
+        } catch (error) {
+            logError("加载 settings.html 失败:", error);
+            toastr.error("MemOS 设置页面加载失败");
+            return;
+        }
+
+        // 2. 绑定 inline-drawer 的展开/折叠事件
+        jQuery('.extension_settings[data-extension-name="memos"]')
+            .find('.inline-drawer-toggle')
+            .on('click', function () {
+                jQuery(this).closest('.inline-drawer').toggleClass('open');
+            });
+
         // 先保存一次默认配置，确保localStorage有数据
         if (!localStorage.getItem(STORAGE_KEY_API_CONFIG)) {
             logDebug("首次运行，初始化默认配置")
@@ -1689,6 +1598,8 @@ jQuery(async () => {
         }
         
         loadSettings()
+        loadSettingsToUI()
+        updateStatsDisplay()
         logDebug("当前配置:", JSON.stringify(memosConfig))
         logDebug("当前设置:", JSON.stringify(memosSettings))
         
@@ -1700,9 +1611,9 @@ jQuery(async () => {
         loadSavedMessageIds()
         logDebug(`已加载 ${savedMessageIds.size} 条已保存消息记录`)
         
-        createFloatingButton()
         setupAutoInjection()
         registerEventListeners()  // 注册事件监听器
+        bindSettingsEvents()  // 绑定设置面板事件
 
         // 更新器事件绑定
         jQuery('#memos-check-update').on('click', () => Updater.checkForUpdates(true))
