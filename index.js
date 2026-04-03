@@ -1,137 +1,6 @@
 // MemOS Integration for SillyTavern
 // 使用 inject API 注入记忆到 prompt
 
-// ============================================
-// Updater Module - 自动更新功能
-// ============================================
-const MemosUpdater = {
-    gitRepoOwner: '1830488003',  // GitHub 用户名
-    gitRepoName: 'memos',       // GitHub 仓库名
-    currentVersion: '1.0.1',
-    latestVersion: '0.0.0',
-
-    async fetchRawFile(url) {
-        const response = await fetch(url, { cache: 'no-cache' });
-        if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
-        return response.text();
-    },
-
-    parseVersion(content) {
-        try {
-            return JSON.parse(content).version || '0.0.0';
-        } catch (error) {
-            console.error(`[${extensionName}] Failed to parse version:`, error);
-            return '0.0.0';
-        }
-    },
-
-    compareVersions(v1, v2) {
-        const parts1 = v1.split('.').map(Number);
-        const parts2 = v2.split('.').map(Number);
-        for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-            const p1 = parts1[i] || 0;
-            const p2 = parts2[i] || 0;
-            if (p1 > p2) return 1;
-            if (p1 < p2) return -1;
-        }
-        return 0;
-    },
-
-    async performUpdate() {
-        try {
-            const { getRequestHeaders } = SillyTavern.getContext().common;
-            const { extension_types } = SillyTavern.getContext().extensions;
-            showToastr('info', '正在开始更新...');
-            
-            const response = await fetch('/api/extensions/update', {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({
-                    extensionName: extensionName,
-                    global: extension_types[extensionName] === 'global',
-                }),
-            });
-            if (!response.ok) throw new Error(await response.text());
-
-            showToastr('success', '更新成功！将在3秒后刷新页面应用更改。');
-            setTimeout(() => location.reload(), 3000);
-        } catch (error) {
-            showToastr('error', `更新失败: ${error.message}`);
-        }
-    },
-
-    async showUpdateConfirmDialog() {
-        const { POPUP_TYPE, callGenericPopup } = SillyTavern;
-        const changelogUrl = `https://raw.githubusercontent.com/${this.gitRepoOwner}/${this.gitRepoName}/main/README.md`;
-        let changelogContent = `发现新版本 ${this.latestVersion}！您想现在更新吗？`;
-        
-        try {
-            changelogContent = await this.fetchRawFile(changelogUrl);
-        } catch (e) {
-            logDebug('获取更新日志失败:', e);
-        }
-
-        if (await callGenericPopup(changelogContent, POPUP_TYPE.CONFIRM, {
-            okButton: '立即更新',
-            cancelButton: '稍后',
-            wide: true,
-            large: true,
-        })) {
-            await this.performUpdate();
-        }
-    },
-
-    async checkForUpdates(isManual = false) {
-        const $btn = $('#memos-check-update');
-        const $indicator = $('#memos-update-indicator');
-
-        if (isManual && $btn.length) {
-            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 检查中...');
-        }
-
-        try {
-            // 获取本地版本
-            const localManifest = await fetch(`${extensionFolderPath}/manifest.json?t=${Date.now()}`);
-            const localContent = await localManifest.text();
-            this.currentVersion = this.parseVersion(localContent);
-            
-            // 更新显示的版本
-            $('#memos-current-version').text(this.currentVersion);
-
-            // 获取远程版本
-            const remoteUrl = `https://raw.githubusercontent.com/${this.gitRepoOwner}/${this.gitRepoName}/main/manifest.json`;
-            const remoteManifest = await this.fetchRawFile(remoteUrl);
-            this.latestVersion = this.parseVersion(remoteManifest);
-
-            if (this.compareVersions(this.latestVersion, this.currentVersion) > 0) {
-                $indicator.show();
-                if ($btn.length) {
-                    $btn.html(`<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`)
-                        .off('click')
-                        .on('click', () => this.showUpdateConfirmDialog());
-                }
-                if (isManual) {
-                    showToastr('success', `发现新版本 ${this.latestVersion}！点击按钮进行更新。`);
-                }
-            } else {
-                $indicator.hide();
-                if (isManual) {
-                    showToastr('info', '您当前已是最新版本。');
-                }
-            }
-        } catch (error) {
-            logError('检查更新失败:', error);
-            if (isManual) {
-                showToastr('error', `检查更新失败: ${error.message}`);
-            }
-        } finally {
-            if (isManual && $btn.length) {
-                $btn.prop('disabled', false).html('<i class="fa-solid fa-cloud-arrow-down"></i> 检查更新');
-            }
-        }
-    }
-};
-
 jQuery(async () => {
     "use strict"
 
@@ -147,6 +16,174 @@ jQuery(async () => {
     const extensionName = "memos"
     const extensionFolderPath = `/scripts/extensions/third-party/${extensionName}`
     const DEBUG_MODE = true
+
+    // ============================================
+    // Updater Module - 自动更新功能（基于 my-world-book-momo 的实现）
+    // ============================================
+    const MemosUpdater = {
+        gitRepoOwner: '1830488003',  // GitHub 用户名
+        gitRepoName: 'memos',       // GitHub 仓库名
+        currentVersion: '1.0.1',
+        latestVersion: '0.0.0',
+        changelogContent: '',
+
+        async fetchRawFileFromGitHub(filePath) {
+            // 尝试 main 分支
+            let url = `https://raw.githubusercontent.com/${this.gitRepoOwner}/${this.gitRepoName}/main/${filePath}`;
+            let response = await fetch(url, { cache: 'no-cache' });
+            
+            // 如果 main 分支失败，尝试 master 分支
+            if (!response.ok) {
+                console.log(`[${extensionName}] main 分支获取失败，尝试 master 分支...`);
+                url = `https://raw.githubusercontent.com/${this.gitRepoOwner}/${this.gitRepoName}/master/${filePath}`;
+                response = await fetch(url, { cache: 'no-cache' });
+            }
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${filePath} from GitHub (tried main and master): ${response.statusText}`);
+            }
+            return response.text();
+        },
+
+        parseVersion(content) {
+            try {
+                return JSON.parse(content).version || '0.0.0';
+            } catch (error) {
+                console.error(`[${extensionName}] Failed to parse version:`, error);
+                return '0.0.0';
+            }
+        },
+
+        compareVersions(v1, v2) {
+            const parts1 = v1.split('.').map(Number);
+            const parts2 = v2.split('.').map(Number);
+            for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+                const p1 = parts1[i] || 0;
+                const p2 = parts2[i] || 0;
+                if (p1 > p2) return 1;
+                if (p1 < p2) return -1;
+            }
+            return 0;
+        },
+
+        async performUpdate() {
+            // 使用 SillyTavern.getContext() 获取上下文
+            const context = SillyTavern.getContext();
+            const { getRequestHeaders } = context.common;
+            const { extension_types } = context.extensions;
+            
+            if (typeof toastr !== 'undefined') {
+                toastr.info('正在开始更新...');
+            }
+            
+            try {
+                const response = await fetch('/api/extensions/update', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({
+                        extensionName: extensionName,
+                        global: extension_types[extensionName] === 'global',
+                    }),
+                });
+                if (!response.ok) throw new Error(await response.text());
+
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('更新成功！将在3秒后刷新页面应用更改。');
+                }
+                setTimeout(() => location.reload(), 3000);
+            } catch (error) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(`更新失败: ${error.message}`);
+                }
+            }
+        },
+
+        async showUpdateConfirmDialog() {
+            // 直接使用 SillyTavern.callGenericPopup，与实时状态栏插件一致
+            try {
+                this.changelogContent = await this.fetchRawFileFromGitHub('README.md');
+            } catch (error) {
+                this.changelogContent = `发现新版本 ${this.latestVersion}！您想现在更新吗？`;
+            }
+
+            if (await SillyTavern.callGenericPopup(
+                this.changelogContent,
+                'confirm',
+                {
+                    okButton: '立即更新',
+                    cancelButton: '稍后',
+                    wide: true,
+                    large: true,
+                }
+            )) {
+                await this.performUpdate();
+            }
+        },
+
+        async checkForUpdates(isManual = false) {
+            const $btn = $('#memos-check-update');
+            const $updateIndicator = $('#memos-update-indicator');
+
+            if (isManual && $btn.length) {
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 检查中...');
+            }
+
+            try {
+                // 获取本地版本 - 使用与实时状态栏一致的路径格式（不带前导斜杠）
+                const localManifestText = await (await fetch(`${extensionFolderPath}/manifest.json?t=${Date.now()}`)).text();
+                this.currentVersion = this.parseVersion(localManifestText);
+
+                // 更新显示的版本
+                $('#memos-current-version').text(this.currentVersion);
+
+                // 获取远程版本
+                const remoteManifestText = await this.fetchRawFileFromGitHub('manifest.json');
+                this.latestVersion = this.parseVersion(remoteManifestText);
+
+                if (this.compareVersions(this.latestVersion, this.currentVersion) > 0) {
+                    // 显示更新指示器
+                    if ($updateIndicator.length) {
+                        $updateIndicator.show();
+                    }
+                    // 更新按钮状态
+                    if ($btn.length) {
+                        $btn.html(`<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`)
+                            .off('click')
+                            .on('click', () => this.showUpdateConfirmDialog());
+                    }
+                    if (isManual) {
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success(`发现新版本 ${this.latestVersion}！点击按钮进行更新。`);
+                        }
+                    }
+                } else {
+                    // 隐藏更新指示器
+                    if ($updateIndicator.length) {
+                        $updateIndicator.hide();
+                    }
+                    if (isManual) {
+                        if (typeof toastr !== 'undefined') {
+                            toastr.info('您当前已是最新版本。');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`[${extensionName}] 检查更新失败:`, error);
+                if (isManual) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(`检查更新失败: ${error.message}`);
+                    }
+                }
+            } finally {
+                if (isManual && $btn.length) {
+                    // 只有在没有新版本时才重置按钮状态
+                    if (this.compareVersions(this.latestVersion, this.currentVersion) <= 0) {
+                        $btn.prop('disabled', false).html('<i class="fa-solid fa-cloud-arrow-down"></i> 检查更新');
+                    }
+                }
+            }
+        }
+    };
 
     // 存储键
     const STORAGE_KEY_API_CONFIG = "memos_api_config"
