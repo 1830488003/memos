@@ -84,31 +84,6 @@ jQuery(async () => {
             }
         },
 
-        async showUpdateConfirmDialog() {
-            try {
-                this.changelogContent =
-                    await this.fetchRawFileFromGitHub('README.md');
-            } catch (error) {
-                this.changelogContent = `发现新版本 ${this.latestVersion}！您想现在更新吗？`;
-            }
-            // 使用正确的 POPUP_TYPE.CONFIRM 而不是字符串 'confirm'
-            const { POPUP_TYPE, callGenericPopup } = SillyTavern;
-            if (
-                await callGenericPopup(
-                    this.changelogContent,
-                    POPUP_TYPE.CONFIRM,
-                    {
-                        okButton: '立即更新',
-                        cancelButton: '稍后',
-                        wide: true,
-                        large: true,
-                    },
-                )
-            ) {
-                await this.performUpdate();
-            }
-        },
-
         async checkForUpdates(isManual = false) {
             const $updateButton = $('#memos-check-update');
             const $updateIndicator = $('#memos-update-indicator');
@@ -143,7 +118,7 @@ jQuery(async () => {
                             `<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`,
                         )
                         .off('click')
-                        .on('click', () => this.showUpdateConfirmDialog());
+                        .on('click', () => this.performUpdate());
                     if (isManual)
                         toastr.success(
                             `发现新版本 ${this.latestVersion}！点击按钮进行更新。`,
