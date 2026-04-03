@@ -91,10 +91,12 @@ jQuery(async () => {
             } catch (error) {
                 this.changelogContent = `发现新版本 ${this.latestVersion}！您想现在更新吗？`;
             }
+            // 使用正确的 POPUP_TYPE.CONFIRM 而不是字符串 'confirm'
+            const { POPUP_TYPE, callGenericPopup } = SillyTavern;
             if (
-                await SillyTavern.callGenericPopup(
+                await callGenericPopup(
                     this.changelogContent,
-                    'confirm',
+                    POPUP_TYPE.CONFIRM,
                     {
                         okButton: '立即更新',
                         cancelButton: '稍后',
