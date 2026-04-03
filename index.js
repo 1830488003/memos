@@ -1736,8 +1736,9 @@ jQuery(async () => {
         registerEventListeners()  // 注册事件监听器
 
         // 自动静默检查更新（5秒后执行）
+        // 改为手动检查而非自动显示通知，避免用户误解
         setTimeout(() => {
-            MemosUpdater.checkForUpdates(true).catch(e => logDebug('自动检查更新失败:', e))
+            MemosUpdater.checkForUpdates(false).catch(e => logDebug('自动检查更新失败:', e))
         }, 5000)
 
         logDebug("MemOS插件初始化完成")
