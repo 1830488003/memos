@@ -99,14 +99,17 @@ jQuery(async () => {
         },
 
         async showUpdateConfirmDialog() {
-            // 直接使用 SillyTavern.callGenericPopup，与实时状态栏插件一致
+            // 通过 getContext 获取正确的 popup API
             try {
                 this.changelogContent = await this.fetchRawFileFromGitHub('README.md');
             } catch (error) {
                 this.changelogContent = `发现新版本 ${this.latestVersion}！您想现在更新吗？`;
             }
 
-            if (await SillyTavern.callGenericPopup(
+            const context = SillyTavern.getContext();
+            const { callGenericPopup } = context.popup;
+
+            if (await callGenericPopup(
                 this.changelogContent,
                 'confirm',
                 {
