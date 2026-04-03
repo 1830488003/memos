@@ -5,7 +5,7 @@
 // Updater Module - 自动更新功能
 // ============================================
 const MemosUpdater = {
-    gitRepoOwner: 'Mooooooon',  // GitHub 用户名
+    gitRepoOwner: '1830488003',  // GitHub 用户名
     gitRepoName: 'memos',       // GitHub 仓库名
     currentVersion: '1.0.1',
     latestVersion: '0.0.0',
@@ -190,6 +190,22 @@ jQuery(async () => {
 
     // 生成消息唯一ID
     // 优先使用楼层索引（全局索引），而不是消息自带的ID，避免重复
+    // 记录上次保存时间和检索时间（用于控制间隔）
+    let lastSaveTimeForInterval = 0  // 上次保存时间（毫秒）
+    let lastRetrieveTimeForInterval = 0  // 上次检索时间（毫秒）
+    
+    // 等待指定毫秒
+    async function waitForInterval(minInterval) {
+        const now = Date.now()
+        const elapsed = now - lastSaveTimeForInterval
+        if (elapsed < minInterval) {
+            const waitTime = minInterval - elapsed
+            logDebug(`等待 ${waitTime}ms 以满足间隔要求...`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+        }
+        lastSaveTimeForInterval = Date.now()
+    }
+    
     async function generateMessageId(msg, index) {
         // 始终使用楼层索引作为主要标识（附加角色卡名和聊天文件名以区分不同聊天）
         const charName = getCharName() || "unknown_char"
@@ -1219,8 +1235,8 @@ jQuery(async () => {
                                 savedCount++
                                 
                                 // 每保存1条等待一下，避免请求过快（初始化批量保存）
-                                // API可能有限流，每条之间加1秒延迟
-                                await new Promise(resolve => setTimeout(resolve, 1000))
+                                // API可能有限流，每条之间加3秒延迟
+                                await new Promise(resolve => setTimeout(resolve, 3000))
                             } catch (e) {
                                 logError(`初始化保存失败 #${globalIndex}:`, e)
                             }
@@ -1314,6 +1330,8 @@ jQuery(async () => {
                             if (isMessageSaved(msgId)) {
                                 logDebug(`用户消息 #${globalIndex} 已保存过，跳过`)
                             } else {
+                                // 等待3秒间隔
+                                await waitForInterval(3000)
                                 // 保存用户消息到 MemOS
                                 logDebug("用户消息，保存到 MemOS...")
                                 try {
@@ -1325,100 +1343,108 @@ jQuery(async () => {
                                 }
                             }
                             
-                            // 检索记忆并注入（每次用户发送都检索）
-                            logDebug("用户消息，检索记忆...")
-                            try {
-                                const result = await searchMemory(content, memosSettings.retrieveCount)
-                                logDebug("检索结果:", result)
-                                
-                                if (result && (result.memories.length > 0 || (result.preferences && result.preferences.length > 0))) {
-                                    await injectMemoryToPrompt(result.memories, result.preferences)
-                                    logDebug("记忆注入成功")
-                                    showToastr("info", `已注入 ${result.memories.length} 条记忆`)
+                            // 检查检索间隔（10秒）
+                            const now = Date.now()
+                            const retrieveElapsed = now - lastRetrieveTimeForInterval
+                            if (retrieveElapsed < 10000) {
+                                logDebug(`检索间隔未满10秒(${retrieveElapsed}ms)，跳过检索`)
+                            } else {
+                                lastRetrieveTimeForInterval = now
+                                // 检索记忆并注入
+                                logDebug("用户消息，检索记忆...")
+                                try {
+                                    const result = await searchMemory(content, memosSettings.retrieveCount)
+                                    logDebug("检索结果:", result)
                                     
-                                    // 注入完成后，等待1.5秒让消息楼层稳定，然后再次触发发送
-                                    setTimeout(async () => {
-                                        logDebug("等待后再次触发发送...")
-                                        try {
-                                            const parentWin = window.parent
-                                            logDebug("sendTextareaMessage函数是否存在:", typeof parentWin.sendTextareaMessage)
-                                            if (typeof parentWin.sendTextareaMessage === "function") {
-                                                await parentWin.sendTextareaMessage()
-                                                logDebug("已触发第二次发送")
-                                            } else {
-                                                logDebug("sendTextareaMessage函数不可用，尝试点击发送按钮")
-                                                
-                                                // 先尝试从当前文档获取（iframe 内）
-                                                let sendBtn = document.querySelector('#send_but')
-                                                
-                                                // 再尝试从父窗口获取
-                                                if (!sendBtn && window.parent) {
-                                                    try {
-                                                        sendBtn = window.parent.document.querySelector('#send_but')
-                                                        logDebug("从父窗口获取到发送按钮")
-                                                    } catch (e) {
-                                                        logError("父窗口访问失败:", e)
+                                    if (result && (result.memories.length > 0 || (result.preferences && result.preferences.length > 0))) {
+                                        await injectMemoryToPrompt(result.memories, result.preferences)
+                                        logDebug("记忆注入成功")
+                                        showToastr("info", `已注入 ${result.memories.length} 条记忆`)
+                                        
+                                        // 注入完成后，等待1.5秒让消息楼层稳定，然后再次触发发送
+                                        setTimeout(async () => {
+                                            logDebug("等待后再次触发发送...")
+                                            try {
+                                                const parentWin = window.parent
+                                                logDebug("sendTextareaMessage函数是否存在:", typeof parentWin.sendTextareaMessage)
+                                                if (typeof parentWin.sendTextareaMessage === "function") {
+                                                    await parentWin.sendTextareaMessage()
+                                                    logDebug("已触发第二次发送")
+                                                } else {
+                                                    logDebug("sendTextareaMessage函数不可用，尝试点击发送按钮")
+                                                    
+                                                    // 先尝试从当前文档获取（iframe 内）
+                                                    let sendBtn = document.querySelector('#send_but')
+                                                    
+                                                    // 再尝试从父窗口获取
+                                                    if (!sendBtn && window.parent) {
+                                                        try {
+                                                            sendBtn = window.parent.document.querySelector('#send_but')
+                                                            logDebug("从父窗口获取到发送按钮")
+                                                        } catch (e) {
+                                                            logError("父窗口访问失败:", e)
+                                                        }
+                                                    }
+                                                    
+                                                    if (sendBtn) {
+                                                        sendBtn.click()
+                                                        logDebug("已点击发送按钮 #send_but")
+                                                    } else {
+                                                        logError("未找到发送按钮，尝试 Enter 键...")
+                                                        // 备用：模拟 Enter 键
+                                                        try {
+                                                            const input = document.querySelector('#send_message_input, #mes_input, textarea') 
+                                                                || window.parent?.document?.querySelector('#send_message_input, #mes_input, textarea')
+                                                            if (input) {
+                                                                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }))
+                                                                logDebug("已触发 Enter 键")
+                                                            }
+                                                        } catch (e) {
+                                                            logError("Enter 键失败:", e)
+                                                        }
                                                     }
                                                 }
-                                                
+                                            } catch (e) {
+                                                logError("触发第二次发送失败:", e)
+                                            }
+                                        }, 1500)
+                                    } else {
+                                        // 即使没有检索到记忆，也要触发发送（用于训练新记忆）
+                                        logDebug("未检索到相关记忆，但仍触发发送（用于训练记忆）")
+                                        // 立即触发发送
+                                        setTimeout(async () => {
+                                            logDebug("无记忆模式下触发发送...")
+                                            try {
+                                                const sendBtn = document.querySelector('#send_but') 
+                                                    || window.parent?.document?.querySelector('#send_but')
                                                 if (sendBtn) {
                                                     sendBtn.click()
                                                     logDebug("已点击发送按钮 #send_but")
                                                 } else {
-                                                    logError("未找到发送按钮，尝试 Enter 键...")
-                                                    // 备用：模拟 Enter 键
-                                                    try {
-                                                        const input = document.querySelector('#send_message_input, #mes_input, textarea') 
-                                                            || window.parent?.document?.querySelector('#send_message_input, #mes_input, textarea')
-                                                        if (input) {
-                                                            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }))
-                                                            logDebug("已触发 Enter 键")
-                                                        }
-                                                    } catch (e) {
-                                                        logError("Enter 键失败:", e)
-                                                    }
+                                                    logError("未找到发送按钮")
                                                 }
+                                            } catch (e) {
+                                                logError("触发发送失败:", e)
                                             }
-                                        } catch (e) {
-                                            logError("触发第二次发送失败:", e)
-                                        }
-                                    }, 1500)
-                                } else {
-                                    // 即使没有检索到记忆，也要触发发送（用于训练新记忆）
-                                    logDebug("未检索到相关记忆，但仍触发发送（用于训练记忆）")
-                                    // 立即触发发送
+                                        }, 1500)
+                                    }
+                                } catch (e) {
+                                    logError("检索失败:", e)
+                                    // 检索失败时也触发发送
+                                    logDebug("检索失败，尝试触发发送...")
                                     setTimeout(async () => {
-                                        logDebug("无记忆模式下触发发送...")
                                         try {
                                             const sendBtn = document.querySelector('#send_but') 
                                                 || window.parent?.document?.querySelector('#send_but')
                                             if (sendBtn) {
                                                 sendBtn.click()
-                                                logDebug("已点击发送按钮 #send_but")
-                                            } else {
-                                                logError("未找到发送按钮")
+                                                logDebug("已点击发送按钮")
                                             }
-                                        } catch (e) {
-                                            logError("触发发送失败:", e)
+                                        } catch (err) {
+                                            logError("触发发送失败:", err)
                                         }
                                     }, 1500)
                                 }
-                            } catch (e) {
-                                logError("检索失败:", e)
-                                // 检索失败时也触发发送
-                                logDebug("检索失败，尝试触发发送...")
-                                setTimeout(async () => {
-                                    try {
-                                        const sendBtn = document.querySelector('#send_but') 
-                                            || window.parent?.document?.querySelector('#send_but')
-                                        if (sendBtn) {
-                                            sendBtn.click()
-                                            logDebug("已点击发送按钮")
-                                        }
-                                    } catch (err) {
-                                        logError("触发发送失败:", err)
-                                    }
-                                }, 1500)
                             }
                         }
                         

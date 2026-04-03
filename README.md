@@ -10,6 +10,18 @@
 
 ---
 
+## 使用方法
+
+1. 打开 https://memos-dashboard-gray.openmem.net/cn/apikeys/ 网站
+2. 点击"快速接入Cloud API"
+3. 登录账号
+4. 获取 API 密钥
+5. 在酒馆中点击大脑图标 🧠
+6. 填写 API 密钥并保存
+7. 完成配置，开始使用！
+
+---
+
 ## 技术架构
 
 ### 目录结构
