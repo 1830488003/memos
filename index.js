@@ -264,41 +264,59 @@ jQuery(async () => {
     }
     
     async function generateMessageId(msg, index) {
-        // 始终使用楼层索引作为主要标识（附加角色卡名和聊天文件名以区分不同聊天）
-        const charName = getCharName() || "unknown_char"
-        const chatFile = await getChatFileName() || "unknown_chat"
+        // 直接使用聊天文件名作为ID基础，不加角色名前缀
+        const chatFile = getChatFileNameSync() || "unknown_chat"
         
-        // 使用全局索引 idx_ 作为唯一标识，这是最可靠的
-        return `char_${charName}_chat_${chatFile}_idx_${index}`
+        // 格式：聊天文件名_idx_楼层索引（如：被迫成为站姐后 - 2026-03-24@22h05m13s_idx_0）
+        return `${chatFile}_idx_${index}`
     }
 
-    // 获取角色卡名字（用于区分不同角色卡的数据存储）
-    function getCharName() {
+    // 同步获取角色卡名字（用于生成消息ID）
+    function getCharNameSync() {
         try {
+            // 直接从 window.parent 获取
             const parentWin = typeof window.parent !== "undefined" ? window.parent : window
             const chars = parentWin.characters
             const thisChId = parentWin.this_chid
             
+            // 调试日志
+            logDebug(`getCharNameSync: chars=${!!chars}, thisChId=${thisChId}`)
+            
             if (chars && Array.isArray(chars) && thisChId !== undefined && thisChId !== null && chars[thisChId] && chars[thisChId].name) {
-                return chars[thisChId].name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "_")
+                const name = chars[thisChId].name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "_")
+                logDebug(`getCharNameSync 成功: ${name}`)
+                return name
+            }
+            
+            // 备用方案：从 characters 数组遍历查找当前角色
+            if (chars && Array.isArray(chars)) {
+                for (let i = 0; i < chars.length; i++) {
+                    if (chars[i] && chars[i].name) {
+                        logDebug(`getCharNameSync 备用(${i}): ${chars[i].name}`)
+                        return chars[i].name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "_")
+                    }
+                }
             }
         } catch (e) {
             logDebug("获取角色卡名失败:", e)
         }
+        logDebug("getCharNameSync 返回 null")
         return null
     }
 
-    // 获取聊天文件名（用于区分同一角色卡的不同聊天）
+    // 直接使用聊天文件名（同步缓存）
     let cachedChatFileName = null
+
+    // 获取聊天文件名 - 简单直接，返回原始值
     async function getChatFileName() {
         if (cachedChatFileName) return cachedChatFileName
         
         // 检查 API 可用性
         if (typeof TavernHelper !== "undefined" && typeof TavernHelper.triggerSlash === "function") {
             try {
-                const chatNameFromCommand = await TavernHelper.triggerSlash("/getchatname")
-                if (chatNameFromCommand && typeof chatNameFromCommand === "string" && chatNameFromCommand.trim()) {
-                    cachedChatFileName = cleanChatName(chatNameFromCommand.trim())
+                const chatName = await TavernHelper.triggerSlash("/getchatname")
+                if (chatName && typeof chatName === "string" && chatName.trim() && chatName.trim() !== "null" && chatName.trim() !== "undefined") {
+                    cachedChatFileName = chatName.trim()
                     logDebug(`获取到聊天文件名: ${cachedChatFileName}`)
                     return cachedChatFileName
                 }
@@ -311,6 +329,18 @@ jQuery(async () => {
         const fallback = `chat_${Date.now()}`
         cachedChatFileName = fallback
         return fallback
+    }
+
+    // 同步版本 - 用于 generateMessageId（同步调用）
+    function getChatFileNameSync() {
+        return cachedChatFileName
+    }
+
+    // 初始化同步缓存（确保 generateMessageId 能正常工作）
+    function initSyncCaches() {
+        // 初始化时清理缓存，让 getChatFileName 重新获取
+        cachedChatFileName = null
+        logDebug(`initSyncCaches: 缓存已清理`)
     }
 
     // 获取当前聊天的唯一标识（用于存储key）
@@ -1301,10 +1331,13 @@ jQuery(async () => {
                 const currentCount = getMessageCount()  // 获取修正后的消息数量（+1）
                 const rawIndex = TavernHelper.getLastMessageId()  // 保留原始索引用于日志
 
-                // 首次运行，初始化
+                            // 首次运行，初始化
                 if (lastMessageId === null && !isInitialized) {
                     isInitializing = true
                     logDebug(`初始化: 消息数 = ${currentCount}`)
+                    
+                    // 初始化同步缓存
+                    initSyncCaches()
                     
                     // 获取当前聊天文件名（用于生成消息ID）
                     await getChatFileName()
@@ -1341,13 +1374,20 @@ jQuery(async () => {
                                 continue
                             }
                             
+                            // 【关键修复】上传前先检查是否已保存过，如果已保存则跳过
+                            logDebug(`检查消息ID: ${msgId} | 已保存列表大小: ${savedMessageIds.size} | 是否已保存: ${isMessageSaved(msgId)}`)
+                            if (isMessageSaved(msgId)) {
+                                logDebug(`消息 #${globalIndex} 已保存过，跳过上传`)
+                                continue
+                            }
+                            
                             // 检查API配置
                             if (!memosConfig.apiKey) {
                                 logDebug(`跳过 #${globalIndex}：API未配置`)
                                 continue
                             }
                             
-                            // 保存消息（不管是否已保存过，都重新保存）
+                            // 保存消息
                             const role = isUser ? "user" : "assistant"
                             logDebug(`初始化保存: #${globalIndex} (${role}) - ${content.substring(0, 50)}...`)
                             
