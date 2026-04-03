@@ -145,11 +145,14 @@ jQuery(async () => {
                     if ($updateIndicator.length) {
                         $updateIndicator.show();
                     }
-                    // 更新按钮状态
+                    // 更新按钮状态 - 使用箭头函数确保 this 指向正确
                     if ($btn.length) {
-                        $btn.html(`<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`)
-                            .off('click')
-                            .on('click', () => this.showUpdateConfirmDialog());
+                        $btn.off('click');  // 先移除所有点击事件
+                        $btn.on('click', () => {
+                            console.log(`[${extensionName}] 更新按钮被点击，调用 showUpdateConfirmDialog`);
+                            this.showUpdateConfirmDialog();
+                        });
+                        $btn.html(`<i class="fa-solid fa-gift"></i> 发现新版 ${this.latestVersion}!`);
                     }
                     if (isManual) {
                         if (typeof toastr !== 'undefined') {

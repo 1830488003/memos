@@ -6,7 +6,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "默默",
-    "version": "1.0.1",
+    "version": "1.0.0",
     "homePage": "https://github.com/1830488003/memos",
     "description": "自动将聊天记录保存到MemOS，并在对话开始时加载相关记忆"
 }
