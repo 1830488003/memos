@@ -1,36 +1,30 @@
-<!-- MemOS 设置面板 - 酒馆扩展菜单格式 -->
-<div class="extension_settings" data-extension-name="memos">
-    <div class="inline-drawer">
-        <div class="inline-drawer-toggle inline-drawer-header">
-            <b>
-                <i class="fa-solid fa-brain"></i>
-                MemOS 记忆集成
-            </b>
-            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-        </div>
-
-        <div class="inline-drawer-content">
-            <!-- 版本与更新信息 -->
+<!-- MemOS 设置弹窗 -->
+<div id="memos-popup-overlay" class="memos-popup-overlay" style="display: none">
+    <div id="memos-popup-container" class="memos-popup-container">
+        <button id="memos-popup-close-button" class="memos-popup-close-button" aria-label="关闭">×</button>
+        <div class="memos-popup-body">
+            <!-- 版本与更新信息1 -->
             <div class="memos-version-panel">
-                <p>作者: 默默</p>
-                <p>
-                    当前版本:
-                    <span id="memos-current-version">0.0.0</span>
-                    <span class="update-indicator" style="display: none; color: #f59e0b;">(发现新版!)</span>
-                </p>
-                <button id="memos-check-update" class="menu_button">
+                <div class="memos-version-info">
+                    <p class="memos-author">作者: 默默</p>
+                    <p class="memos-version">
+                        当前版本: <span id="memos-current-version">0.0.0</span>
+                        <span class="update-indicator" style="display: none; color: #f59e0b;">(发现新版!)</span>
+                    </p>
+                </div>
+                <button id="memos-check-update" class="memos-button primary">
                     <i class="fa-solid fa-cloud-arrow-down"></i> 检查更新
                 </button>
             </div>
             <!-- 手动更新说明（检测到新版本时显示） -->
-            <div id="memos-update-guide" class="memos-update-guide" style="display: none; margin-top: 10px; padding: 10px; background: #2a2a2a; border-radius: 5px; border: 1px solid #f59e0b;">
+            <div id="memos-update-guide" class="memos-update-guide" style="display: none;">
                 <p style="color: #f59e0b; margin-bottom: 8px;"><i class="fa-solid fa-circle-info"></i> 发现新版本 <span id="memos-new-version-display">0.0.0</span>！</p>
                 <p style="margin-bottom: 5px;">手动更新步骤：</p>
                 <ol style="margin: 5px 0; padding-left: 20px; color: #ccc; font-size: 12px;">
                     <li>打开酒馆「管理扩展」页面</li>
                     <li>找到并删除此扩展（memos）</li>
                     <li>打开「安装扩展」</li>
-                    <li>输入安装地址：<code style="background: #444; padding: 2px 5px; border-radius: 3px;">https://github.com/1830488003/memos</code></li>
+                    <li>输入安装地址：<code style="background: #444; padding: 2px 5px; border-radius: 3px; word-break: break-all;">https://github.com/1830488003/memos</code></li>
                     <li>点击安装即可完成更新</li>
                 </ol>
             </div>
@@ -40,129 +34,146 @@
             <hr />
 
             <!-- API配置 -->
-            <div class="setting_item">
-                <label for="memos-api-endpoint">API 端点:</label>
-                <input type="text" id="memos-api-endpoint" class="text_pole" value="https://memos.memtensor.cn/api/openmem/v1">
-            </div>
-            
-            <div class="setting_item">
-                <label for="memos-api-key">API 密钥:</label>
-                <input type="password" id="memos-api-key" class="text_pole" placeholder="输入你的 MemOS API Key (mpg-xxx)">
-                <small>从 MemOS Cloud 控制台获取</small>
-            </div>
-            
-            <div class="setting_item flex-container">
-                <button id="memos-test-connection" class="menu_button">
-                    🔌 测试连接
-                </button>
-                <button id="memos-save-config" class="menu_button">
-                    💾 保存配置
-                </button>
-                <button id="memos-clear-config" class="menu_button">
-                    🗑️ 清除配置
-                </button>
-            </div>
-            
-            <div id="memos-api-status" class="memos-status-box">
-                状态: 未配置
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-key"></i> API配置</h4>
+                <div class="memos-form-item">
+                    <label for="memos-api-endpoint">API 端点</label>
+                    <input type="text" id="memos-api-endpoint" class="memos-input" value="https://memos.memtensor.cn/api/openmem/v1">
+                </div>
+                
+                <div class="memos-form-item">
+                    <label for="memos-api-key">API 密钥</label>
+                    <input type="password" id="memos-api-key" class="memos-input" placeholder="输入你的 MemOS API Key (mpg-xxx)">
+                    <small>从 MemOS Cloud 控制台获取</small>
+                </div>
+                
+                <div class="memos-button-group">
+                    <button id="memos-test-connection" class="memos-button secondary">
+                        🔌 测试连接
+                    </button>
+                    <button id="memos-save-config" class="memos-button primary">
+                        💾 保存配置
+                    </button>
+                    <button id="memos-clear-config" class="memos-button danger">
+                        🗑️ 清除配置
+                    </button>
+                </div>
+                
+                <div id="memos-api-status" class="memos-status-box">
+                    状态: 未配置
+                </div>
             </div>
 
             <hr />
 
             <!-- 功能开关 -->
-            <div class="setting_item flex-container">
-                <label for="memos-enabled">启用插件</label>
-                <div class="SillyTavernSwitch">
-                    <input id="memos-enabled" type="checkbox" checked>
-                    <div class="SillyTavernSlider"></div>
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-sliders"></i> 功能设置</h4>
+                <div class="memos-form-item memos-switch-label">
+                    <label for="memos-enabled">启用插件</label>
+                    <label class="memos-switch">
+                        <input id="memos-enabled" type="checkbox" checked>
+                        <span class="memos-slider"></span>
+                    </label>
                 </div>
-            </div>
 
-            <div class="setting_item flex-container">
-                <label for="memos-auto-save">自动保存对话</label>
-                <div class="SillyTavernSwitch">
-                    <input id="memos-auto-save" type="checkbox" checked>
-                    <div class="SillyTavernSlider"></div>
+                <div class="memos-form-item memos-switch-label">
+                    <label for="memos-auto-save">自动保存对话</label>
+                    <label class="memos-switch">
+                        <input id="memos-auto-save" type="checkbox" checked>
+                        <span class="memos-slider"></span>
+                    </label>
                 </div>
-            </div>
 
-            <div class="setting_item flex-container">
-                <label for="memos-auto-retrieve">自动检索记忆</label>
-                <div class="SillyTavernSwitch">
-                    <input id="memos-auto-retrieve" type="checkbox" checked>
-                    <div class="SillyTavernSlider"></div>
+                <div class="memos-form-item memos-switch-label">
+                    <label for="memos-auto-retrieve">自动检索记忆</label>
+                    <label class="memos-switch">
+                        <input id="memos-auto-retrieve" type="checkbox" checked>
+                        <span class="memos-slider"></span>
+                    </label>
                 </div>
-            </div>
 
-            <div class="setting_item">
-                <label for="memos-retrieve-count">检索数量:</label>
-                <input type="number" id="memos-retrieve-count" class="text_pole" value="5" min="1" max="10">
-            </div>
+                <div class="memos-form-item">
+                    <label for="memos-retrieve-count">检索数量</label>
+                    <input type="number" id="memos-retrieve-count" class="memos-input" value="5" min="1" max="10">
+                </div>
 
-            <div class="setting_item">
-                <label for="memos-relativity-threshold">相关度阈值:</label>
-                <input type="number" id="memos-relativity-threshold" class="text_pole" value="0.5" min="0" max="1" step="0.1">
+                <div class="memos-form-item">
+                    <label for="memos-relativity-threshold">相关度阈值 (0-1)</label>
+                    <input type="number" id="memos-relativity-threshold" class="memos-input" value="0.5" min="0" max="1" step="0.1">
+                </div>
             </div>
 
             <hr />
 
             <!-- 手动操作 -->
-            <div class="setting_item">
-                <label for="memos-manual-content">手动保存内容:</label>
-                <textarea id="memos-manual-content" class="text_pole" rows="3" placeholder="输入要保存到 MemOS 的内容..."></textarea>
-            </div>
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-hand-pointer"></i> 手动操作</h4>
+                <div class="memos-form-item">
+                    <label for="memos-manual-content">手动保存内容</label>
+                    <textarea id="memos-manual-content" class="memos-textarea" rows="3" placeholder="输入要保存到 MemOS 的内容..."></textarea>
+                </div>
 
-            <div class="setting_item">
-                <button id="memos-manual-save" class="menu_button">
-                    📤 保存到 MemOS
-                </button>
+                <div class="memos-button-group">
+                    <button id="memos-manual-save" class="memos-button primary">
+                        📤 保存到 MemOS
+                    </button>
+                    <button id="memos-save-current-chat" class="memos-button secondary">
+                        💬 保存当前对话
+                    </button>
+                </div>
             </div>
 
             <hr />
 
-            <div class="setting_item">
-                <label for="memos-search-query">搜索记忆:</label>
-                <input type="text" id="memos-search-query" class="text_pole" placeholder="输入关键词搜索...">
-            </div>
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-magnifying-glass"></i> 搜索记忆</h4>
+                <div class="memos-form-item">
+                    <label for="memos-search-query">搜索关键词</label>
+                    <input type="text" id="memos-search-query" class="memos-input" placeholder="输入关键词搜索...">
+                </div>
 
-            <div class="setting_item flex-container">
-                <button id="memos-search" class="menu_button">
-                    🔍 搜索
-                </button>
-                <button id="memos-get-all" class="menu_button">
-                    📋 显示所有
-                </button>
+                <div class="memos-button-group">
+                    <button id="memos-search" class="memos-button secondary">
+                        🔍 搜索
+                    </button>
+                    <button id="memos-get-all" class="memos-button secondary">
+                        📋 显示所有
+                    </button>
+                </div>
             </div>
 
             <hr />
 
             <!-- 记忆注入预览 -->
-            <div class="setting_item">
-                <label>记忆注入预览:</label>
-                <textarea id="memos-injection-preview" class="text_pole" rows="6" readonly placeholder="检索到的记忆将显示在这里..."></textarea>
-            </div>
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-eye"></i> 记忆预览</h4>
+                <div class="memos-form-item">
+                    <label>记忆注入预览</label>
+                    <textarea id="memos-injection-preview" class="memos-textarea" rows="4" readonly placeholder="检索到的记忆将显示在这里..."></textarea>
+                </div>
 
-            <div class="setting_item flex-container">
-                <button id="memos-refresh-injection" class="menu_button">
-                    🔄 刷新注入
-                </button>
-                <button id="memos-clear-injection" class="menu_button">
-                    🗑️ 清空注入
-                </button>
+                <div class="memos-button-group">
+                    <button id="memos-refresh-injection" class="memos-button secondary">
+                        🔄 刷新注入
+                    </button>
+                    <button id="memos-clear-injection" class="memos-button danger">
+                        🗑️ 清空注入
+                    </button>
+                </div>
             </div>
 
             <hr />
 
             <!-- 统计信息 -->
-            <div class="setting_item">
-                <label>统计信息:</label>
+            <div class="memos-setting-group">
+                <h4><i class="fa-solid fa-chart-bar"></i> 统计信息</h4>
                 <div class="memos-stats-grid">
                     <div class="memos-stat-box">
                         <div class="memos-stat-value" id="memos-total-memories">0</div>
                         <div class="memos-stat-label">记忆总数</div>
                     </div>
                     <div class="memos-stat-box">
-                        <div class="memos-stat-value" id="memos-sessions-saved">0</div>
                         <div class="memos-stat-label">已保存消息</div>
                     </div>
                     <div class="memos-stat-box">
@@ -174,11 +185,6 @@
                         <div class="memos-stat-label">最后检索</div>
                     </div>
                 </div>
-            </div>
-
-            <div class="setting_item">
-                <label>最后保存时间:</label>
-                <div id="memos-last-save" style="color: #888;">从未</div>
             </div>
         </div>
     </div>
