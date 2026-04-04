@@ -283,7 +283,6 @@ jQuery(async () => {
 
     const STORAGE_KEY_API_CONFIG = "memos_api_config";
     const STORAGE_KEY_SETTINGS = "memos_settings";
-    const STORAGE_KEY_BUTTON_POS = "memos-button-position";
     const STORAGE_KEY_SAVED_MESSAGES = "memos_saved_message_ids";
     const STORAGE_KEY_SAVED_MESSAGES_VERSION = "memos_saved_version";
     const SAVED_VERSION = "2.0";
@@ -1405,144 +1404,7 @@ jQuery(async () => {
     }
 
     // ===================================================================================
-    // 15. 浮动按钮和弹窗
-    // ===================================================================================
-
-    function createFloatingButton() {
-        if (document.getElementById('memos-floating-button')) {
-            return;
-        }
-        
-        const buttonHtml = `<div id="memos-floating-button" title="MemOS 记忆集成"><i class="fa-solid fa-brain"></i></div>`;
-        jQuery('body').append(buttonHtml);
-        logDebug("浮动按钮已创建");
-    }
-
-    function showPopup() {
-        const $overlay = jQuery('#memos-popup-overlay');
-        const $popup = jQuery('#memos-popup-container');
-        
-        if ($overlay.length && $popup.length) {
-            $overlay.show();
-            logDebug("弹窗已显示");
-        }
-    }
-
-    function hidePopup() {
-        jQuery('#memos-popup-overlay').hide();
-        logDebug("弹窗已隐藏");
-    }
-
-    function makeButtonDraggable($button) {
-        let isDragging = false;
-        let hasMoved = false;
-        let offset = { x: 0, y: 0 };
-        let startPos = { x: 0, y: 0 };
-
-        const dragStart = (e) => {
-            isDragging = true;
-            hasMoved = false;
-            $button.css("cursor", "grabbing");
-
-            const event = e.type === "touchstart" ? e.touches[0] : e;
-            const buttonPos = $button.offset();
-            offset.x = event.clientX - buttonPos.left;
-            offset.y = event.clientY - buttonPos.top;
-            startPos.x = event.clientX;
-            startPos.y = event.clientY;
-        };
-
-        const dragMove = (e) => {
-            if (!isDragging) return;
-
-            const event = e.type === "touchmove" ? e.touches[0] : e;
-
-            if (!hasMoved) {
-                if (Math.abs(event.clientX - startPos.x) > 5 || Math.abs(event.clientY - startPos.y) > 5) {
-                    hasMoved = true;
-                }
-            }
-
-            if (hasMoved) {
-                e.preventDefault();
-                $button.css({
-                    top: event.clientY - offset.y + "px",
-                    left: event.clientX - offset.x + "px",
-                    right: "auto",
-                    bottom: "auto",
-                });
-            }
-        };
-
-        const dragEnd = () => {
-            if (!isDragging) return;
-            isDragging = false;
-            $button.css("cursor", "grab");
-            
-            if (hasMoved) {
-                localStorage.setItem(STORAGE_KEY_BUTTON_POS, JSON.stringify({
-                    top: $button.css('top'),
-                    left: $button.css('left')
-                }));
-            }
-        };
-
-        $button.on('mousedown touchstart', dragStart);
-        jQuery(document).on('mousemove touchmove', dragMove);
-        jQuery(document).on('mouseup touchend', dragEnd);
-
-        $button.on('click', (e) => {
-            if (hasMoved) {
-                e.stopPropagation();
-                return;
-            }
-            showPopup();
-        });
-    }
-
-    function handleWindowResize($button) {
-        let resizeTimeout;
-        jQuery(window).on('resize.memos', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                if (!$button.length) return;
-
-                const maxLeft = jQuery(window).width() - $button.outerWidth();
-                const maxTop = jQuery(window).height() - $button.outerHeight();
-                let left = $button.offset().left;
-                let top = $button.offset().top;
-
-                if (left > maxLeft) $button.css('left', maxLeft + 'px');
-                if (left < 0) $button.css('left', '0px');
-                if (top > maxTop) $button.css('top', maxTop + 'px');
-                if (top < 0) $button.css('top', '0px');
-
-                localStorage.setItem(STORAGE_KEY_BUTTON_POS, JSON.stringify({
-                    top: $button.css('top'),
-                    left: $button.css('left')
-                }));
-            }, 150);
-        });
-    }
-
-    function initializeFloatingButton() {
-        createFloatingButton();
-        const $button = jQuery('#memos-floating-button');
-        
-        const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_BUTTON_POS) || 'null');
-        if (savedPos) {
-            $button.css(savedPos);
-        } else {
-            $button.css({ top: '150px', right: '20px' });
-        }
-        
-        makeButtonDraggable($button);
-        handleWindowResize($button);
-        logDebug("浮动按钮初始化完成");
-    }
-
-    // ===================================================================================
-    // 16. 主初始化函数
+    // 15. 主初始化函数 - 注入到酒馆扩展容器
     // ===================================================================================
 
     async function init() {
@@ -1562,35 +1424,29 @@ jQuery(async () => {
             return;
         }
 
-        // 确保CSS样式被加载
-        if (!document.querySelector(`link[href*="${extensionFolderPath}/style.css"]`)) {
-            logDebug("手动加载CSS样式...");
-            try {
-                const link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.type = 'text/css';
-                link.href = `/${extensionFolderPath}/style.css`;
-                document.head.appendChild(link);
-                logDebug("CSS样式已添加到页面");
-            } catch (e) {
-                logError("CSS加载失败:", e);
-            }
+        // 等待酒馆扩展容器就绪
+        let attempts = 0;
+        const maxAttempts = 30;
+        while (!document.getElementById('extensions_settings2') && attempts < maxAttempts) {
+            await delay(100);
+            attempts++;
         }
 
-        // 动态加载settings.html
+        if (!document.getElementById('extensions_settings2')) {
+            logError("酒馆扩展容器 #extensions_settings2 未找到");
+            // 继续初始化，只是无法显示设置面板
+        }
+
+        // 加载settings.html到扩展容器
         try {
-            const settingsHtml = await jQuery.get(`${extensionFolderPath}/settings.html`);
-            jQuery('body').append(settingsHtml);
-            logDebug("settings.html 已加载到页面");
+            const settingsHtmlPath = `${extensionFolderPath}/settings.html`;
+            logDebug(`加载设置HTML: ${settingsHtmlPath}`);
+            const html = await jQuery.get(settingsHtmlPath);
+            jQuery('#extensions_settings2').append(html);
+            logDebug("settings.html 已注入到扩展容器");
         } catch (error) {
             logError("加载 settings.html 失败:", error);
         }
-
-        // 绑定弹窗关闭事件
-        jQuery('#memos-popup-close-button').on('click touchend', hidePopup);
-        jQuery('#memos-popup-overlay').on('click', function(e) {
-            if (e.target === this) hidePopup();
-        });
 
         // 初始化配置
         if (!localStorage.getItem(STORAGE_KEY_API_CONFIG)) {
@@ -1606,9 +1462,6 @@ jQuery(async () => {
         
         loadSavedMessageIds();
         logDebug(`已加载${savedMessageIds.size} 条已保存消息记录`);
-
-        // 初始化浮动按钮
-        initializeFloatingButton();
         
         // 启动高级功能
         logDebug("核心API就绪，启动高级功能...");
