@@ -468,7 +468,6 @@ jQuery(async () => {
     function markMessageSaved(msgId) {
         savedMessageIds.add(msgId);
         persistSavedMessageIds();
-        logDebug(`已保存消息ID: ${msgId}，当前列表大小: ${savedMessageIds.size}`);
     }
 
     // ===================================================================================
@@ -893,9 +892,8 @@ jQuery(async () => {
                                 continue;
                             }
                             
-                            logDebug(`检查消息ID: ${msgId} | 已保存列表大小: ${savedMessageIds.size} | 是否已保存: ${isMessageSaved(msgId)}`);
                             if (isMessageSaved(msgId)) {
-                                logDebug(`消息 #${globalIndex} 已保存过，跳过上传`);
+                                logDebug(`#${globalIndex} 已保存，跳过`);
                                 continue;
                             }
                             
@@ -905,14 +903,14 @@ jQuery(async () => {
                             }
                             
                             const role = isUser ? "user" : "assistant";
-                            logDebug(`初始化保存 #${globalIndex} (${role}) - ${content.substring(0, 50)}...`);
+                                logDebug(`#${globalIndex} 初始化保存 (${role})`);
                             
                             try {
                                 const result = await addMessage(role, content.trim(), {});
                                 if (result) {
-                                    logDebug(`初始化保存成功#${globalIndex}`);
+                                logDebug(`#${globalIndex} 保存成功`);
                                 } else {
-                                    logDebug(`初始化保存失败或被拦截#${globalIndex}`);
+                                    logDebug(`#${globalIndex} 保存失败`);
                                 }
                                 markMessageSaved(msgId);
                                 savedCount++;
@@ -923,7 +921,7 @@ jQuery(async () => {
                             }
                         }
                         
-                        logDebug(`初始化完成: 已保存${savedCount} 条，跳过 ${skipCount} 条（注入记忆楼层），总计 ${processedMessageIndices.size} 条`);
+                        logDebug(`初始化完成: 保存${savedCount}条, 跳过${skipCount}条`);
                     }
                     
                     lastMessageId = currentCount;
@@ -975,7 +973,7 @@ jQuery(async () => {
                         const content = msg.message || msg.content || msg.mes || "";
                         const isUser = msg.is_user === true || msg.role === "user";
                         
-                        logDebug(`处理消息 #${globalIndex} (ID: ${msgId}): ${content.substring(0, 30)}... is_user: ${isUser}, role: ${msg.role}`);
+                        logDebug(`#${globalIndex} 处理中`);
                         
                         if (!content || !content.trim()) {
                             processedMessageIndices.add(globalIndex);
@@ -997,14 +995,13 @@ jQuery(async () => {
 
                         if (isUser && msg.role === "user") {
                             if (isMessageSaved(msgId)) {
-                                logDebug(`用户消息 #${globalIndex} 已保存过，跳过`);
+                                logDebug(`#${globalIndex} 已保存，跳过`);
                             } else {
                                 await waitForInterval(2000);
-                                logDebug("用户消息，保存到 MemOS...");
+                                logDebug(`#${globalIndex} 保存用户消息`);
                                 try {
                                     await addMessage("user", content.trim());
                                     markMessageSaved(msgId);
-                                    logDebug("用户消息已保存到 MemOS");
                                 } catch (e) {
                                     logError("保存用户消息失败:", e);
                                 }
@@ -1014,15 +1011,14 @@ jQuery(async () => {
                             const retrieveElapsed = now - lastRetrieveTimeForInterval;
                             
                             if (retrieveElapsed < 30000) {
-                                logDebug(`检索间隔未满(30秒)，当前${retrieveElapsed}ms)，跳过检索`);
+                                logDebug(`#${globalIndex} 检索冷却中`);
                             } else {
                                 lastRetrieveTimeForInterval = now;
-                                logDebug("用户消息，检索记忆...");
+                                logDebug(`#${globalIndex} 检索记忆...`);
                                 
                                 try {
                                     if (window.SillyTavern && typeof window.SillyTavern.stopGeneration === "function") {
                                         window.SillyTavern.stopGeneration();
-                                        logDebug(`停止生成`);
                                     }
                                     
                                     await triggerSlashSafe("/stop");
@@ -1033,42 +1029,22 @@ jQuery(async () => {
                                 
                                 try {
                                     const result = await searchMemory(content, memosSettings.retrieveCount);
-                                    logDebug("检索结果:", result);
+                                    logDebug(`#${globalIndex} 检索到${result?.memories?.length || 0}条记忆`);
                                     
                                     if (result && (result.memories.length > 0 || (result.preferences && result.preferences.length > 0))) {
                                         await injectMemoryToPrompt(result.memories, result.preferences);
-                                        logDebug("记忆注入成功");
                                         showToastr("info", `已注入${result.memories.length} 条记忆`);
-                                        
-                                        setTimeout(async () => {
-                                            logDebug("记忆注入完成，触发生成...");
-                                            try {
-                                                const sendBtn = document.querySelector('#send_but, #gen_button');
-                                                if (sendBtn) {
-                                                    sendBtn.click();
-                                                    logDebug("已点击生成按钮");
-                                                } else if (typeof window.sendTextareaMessage === "function") {
-                                                    window.sendTextareaMessage();
-                                                }
-                                            } catch (e) {
-                                                logError("触发生成失败:", e);
-                                            }
-                                        }, 1000);
-                                    } else {
-                                        logDebug("未检索到相关记忆，仍触发生成（用于训练记忆）");
-                                        setTimeout(async () => {
-                                            try {
-                                                const sendBtn = document.querySelector('#send_but, #gen_button');
-                                                if (sendBtn) {
-                                                    sendBtn.click();
-                                                } else if (typeof window.sendTextareaMessage === "function") {
-                                                    window.sendTextareaMessage();
-                                                }
-                                            } catch (e) {
-                                                logError("触发生成失败:", e);
-                                            }
-                                        }, 1000);
                                     }
+                                    
+                                    setTimeout(async () => {
+                                        try {
+                                            const sendBtn = document.querySelector('#send_but, #gen_button');
+                                            if (sendBtn) sendBtn.click();
+                                            else if (typeof window.sendTextareaMessage === "function") window.sendTextareaMessage();
+                                        } catch (e) {
+                                            logError("触发生成失败:", e);
+                                        }
+                                    }, 1000);
                                 } catch (e) {
                                     logError("检索失败:", e);
                                 }
@@ -1083,13 +1059,12 @@ jQuery(async () => {
                             markMessageSaved(msgId);
                         } else if (isNotUser && content && content.trim() && msg.role !== "system") {
                             if (isMessageSaved(msgId)) {
-                                logDebug(`AI消息 #${globalIndex} 已保存过，跳过`);
+                                logDebug(`#${globalIndex} 已保存，跳过`);
                             } else {
-                                logDebug("AI回复，保存消息到 MemOS...");
+                                logDebug(`#${globalIndex} 保存AI消息`);
                                 try {
                                     await addMessage("assistant", content.trim());
                                     markMessageSaved(msgId);
-                                    logDebug("AI消息已保存到 MemOS");
                                 } catch (e) {
                                     logError("保存失败:", e);
                                 }
@@ -1319,11 +1294,17 @@ jQuery(async () => {
     }
 
     function updateStatsDisplay() {
-        jQuery("#memos-total-memories").text(totalMemories);
         jQuery("#memos-sessions-saved").text(savedMessageIds.size);
         jQuery("#memos-retrieves-count").text(totalRetrieves);
         jQuery("#memos-last-retrieve").text(lastRetrieveTime ? formatTime(lastRetrieveTime) : "从未");
         jQuery("#memos-last-save").text(lastAddTime ? formatTime(lastAddTime) : "从未");
+    }
+    
+    // 定期更新统计显示（每5秒）
+    function startStatsUpdater() {
+        setInterval(() => {
+            updateStatsDisplay();
+        }, 5000);
     }
     
     function formatTime(timestamp) {
@@ -1392,9 +1373,7 @@ jQuery(async () => {
         });
 
         jQuery("#memos-manual-save").on("click", manualSave);
-        jQuery("#memos-save-current-chat").on("click", saveCurrentChat);
         jQuery("#memos-search").on("click", searchMemories);
-        jQuery("#memos-get-all").on("click", showAllMemories);
         jQuery("#memos-refresh-injection").on("click", refreshInjection);
         jQuery("#memos-clear-injection").on("click", clearInjection);
 
@@ -1475,6 +1454,7 @@ jQuery(async () => {
         setupAutoInjection();
         registerEventListeners();
         bindSettingsEvents();
+        startStatsUpdater(); // 启动统计信息定时更新
 
         // 自动静默检查更新（5秒后执行）
         setTimeout(() => {

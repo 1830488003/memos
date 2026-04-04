@@ -130,9 +130,6 @@
                     <button id="memos-manual-save" class="menu_button">
                         📤 保存到 MemOS
                     </button>
-                    <button id="memos-save-current-chat" class="menu_button">
-                        💬 保存当前对话
-                    </button>
                 </div>
             </div>
         </div>
@@ -146,9 +143,6 @@
                 <div style="display: flex; gap: 5px;">
                     <button id="memos-search" class="menu_button">
                         🔍 搜索
-                    </button>
-                    <button id="memos-get-all" class="menu_button">
-                        📋 显示所有
                     </button>
                 </div>
             </div>
@@ -179,13 +173,15 @@
             <div class="setting_name">统计信息</div>
             <div class="setting_value memos-stats-container">
                 <div class="memos-stats-inline">
-                    <span class="memos-stat-item">记忆总数: <span id="memos-total-memories">0</span></span>
-                    <span class="memos-stat-item">已保存: <span id="memos-sessions-saved">0</span></span>
-                    <span class="memos-stat-item">检索次数: <span id="memos-retrieves-count">0</span></span>
+                    <span class="memos-stat-item">本会话已保存: <span id="memos-sessions-saved">0</span> 条</span>
+                    <span class="memos-stat-item">检索次数: <span id="memos-retrieves-count">0</span> 次</span>
                 </div>
                 <div class="memos-stats-inline">
                     <span class="memos-stat-item">最后检索: <span id="memos-last-retrieve">从未</span></span>
                     <span class="memos-stat-item">最后保存: <span id="memos-last-save">从未</span></span>
+                </div>
+                <div class="memos-stats-inline" style="margin-top: 5px;">
+                    <span class="memos-stat-item" style="color: #888; font-size: 11px;">* 统计基于本插件本地记录</span>
                 </div>
             </div>
         </div>
