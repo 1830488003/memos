@@ -115,7 +115,7 @@ if (retrieveElapsed < 10000) {
 - 触发生成：点击 `#send_but` 按钮，备用 `sendTextareaMessage()` 函数
 
 ```javascript
-// 停止生成
+// 停止生成1
 if (parentWin.SillyTavern && typeof parentWin.SillyTavern.stopGeneration === "function") {
     const stopped = parentWin.SillyTavern.stopGeneration()
     logDebug(`停止生成: ${stopped ? "成功" : "无需停止或已停止"}`)
