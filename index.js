@@ -941,6 +941,9 @@ jQuery(async () => {
                     isInitializing = false;
                     lastMessageId = null;
                     processedMessageIndices = new Set();
+                    // 清除用户ID缓存，切换到新聊天后使用新的用户ID
+                    delete getCurrentUserId.cached;
+                    logDebug("已清除用户ID缓存");
                     return;
                 }
 
