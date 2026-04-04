@@ -547,9 +547,22 @@ jQuery(async () => {
                 logDebug(`将检索 ${enabledKbIds.length} 个知识库:`, enabledKbIds);
             }
             
-            logDebug("搜索请求:", JSON.stringify(data));
+            logDebug("========================================");
+            logDebug("【MemOS】开始检索记忆");
+            logDebug("【MemOS】用户ID:", userId);
+            logDebug("【MemOS】会话ID:", conversationId);
+            logDebug("【MemOS】检索数量设置:", limitValue);
+            logDebug("【MemOS】相关度阈值:", memosSettings.relativityThreshold);
+            logDebug("【MemOS】发送的完整请求数据:");
+            console.log("[MemOS] 请求数据:", JSON.stringify(data, null, 2));
+            logDebug("========================================");
 
             const result = await callMemOSApi("/search/memory", data);
+            
+            // 打印API返回的完整原始数据
+            console.log("[MemOS] ========== API完整返回数据 ==========");
+            console.log(result);
+            console.log("[MemOS] ========== API完整返回结束 ==========");
             
             const memoryDetailList = result.memory_detail_list || [];
             const preferenceDetailList = result.preference_detail_list || [];
@@ -560,7 +573,7 @@ jQuery(async () => {
                 (m.relativity || m.score || m.relevance || 0) >= memosSettings.relativityThreshold
             );
             const preferences = preferenceDetailList.filter(p =>
-                (p.score || p.relevance || 0) >= memosSettings.relativityThreshold
+                (p.relativity || p.score || p.relevance || 0) >= memosSettings.relativityThreshold
             );
 
             const formattedMemories = memories.map(m => ({
@@ -569,9 +582,48 @@ jQuery(async () => {
             }));
             const formattedPreferences = preferences.map(p => ({
                 content: p.preference || p.content || "",
-                score: p.score || 0
+                score: p.relativity || p.score || 0
             }));
 
+            console.log("[MemOS] API原始返回数量:", {
+                memory_count: memoryDetailList.length,
+                preference_count: preferenceDetailList.length,
+                skill_count: (result.skill_detail_list || []).length
+            });
+            
+            // 打印原始记忆内容
+            if (memoryDetailList.length > 0) {
+                console.log("[MemOS] ========== 原始记忆内容 ==========");
+                memoryDetailList.forEach((m, i) => {
+                    console.log(`[MemOS] 记忆${i+1}:`, {
+                        id: m.id,
+                        memory_value: m.memory_value,
+                        memory_type: m.memory_type,
+                        relativity: m.relativity,
+                        tags: m.tags
+                    });
+                });
+                console.log("[MemOS] ========== 原始记忆结束 ==========");
+            }
+            
+            // 打印原始偏好内容
+            if (preferenceDetailList.length > 0) {
+                console.log("[MemOS] ========== 原始偏好内容 ==========");
+                preferenceDetailList.forEach((p, i) => {
+                    console.log(`[MemOS] 偏好${i+1}:`, {
+                        id: p.id,
+                        preference: p.preference,
+                        preference_type: p.preference_type,
+                        relativity: p.relativity
+                    });
+                });
+                console.log("[MemOS] ========== 原始偏好结束 ==========");
+            }
+            
+            console.log("[MemOS] 过滤后(相关度>=" + memosSettings.relativityThreshold + "):", {
+                memory_count: formattedMemories.length,
+                preference_count: formattedPreferences.length
+            });
             logDebug(`搜索到${formattedMemories.length} 条记忆`);
             
             lastRetrieveTime = Date.now();
@@ -757,10 +809,10 @@ jQuery(async () => {
     // ===================================================================================
 
     function formatInjectionContext(memories, preferences) {
-        let context = "[MemOS 记忆上下文]\n";
+        let context = "[MemOS 记忆上下文]\n\n";
         
         if (memories && memories.length > 0) {
-            context += "相关记忆:\n";
+            context += "以下是用户之前的聊天记忆：\n";
             memories.forEach((m, i) => {
                 const content = m.content || m.memory || m.text || "";
                 const score = (m.score || m.relevance || 0).toFixed(2);
@@ -769,14 +821,15 @@ jQuery(async () => {
         }
 
         if (preferences && preferences.length > 0) {
-            context += "\n用户偏好:\n";
+            context += "\n以下是用户的行为偏好：\n";
             preferences.forEach((p, i) => {
                 const content = p.content || p.preference || p.text || "";
-                context += `${i + 1}. ${content}\n`;
+                const score = (p.score || p.relativity || p.relevance || 0).toFixed(2);
+                context += `${i + 1}. [相关性: ${score}] ${content}\n`;
             });
         }
 
-        context += "[/MemOS 记忆上下文]";
+        context += "\n[/MemOS 记忆上下文]";
         return context;
     }
 
@@ -1063,7 +1116,9 @@ jQuery(async () => {
                                     
                                     if (result && (result.memories.length > 0 || (result.preferences && result.preferences.length > 0))) {
                                         await injectMemoryToPrompt(result.memories, result.preferences);
-                                        showToastr("info", `已注入${result.memories.length} 条记忆`);
+                                        const memCount = result.memories.length;
+                                        const prefCount = result.preferences ? result.preferences.length : 0;
+                                        showToastr("info", `已注入记忆${memCount}条、偏好${prefCount}条`);
                                     }
                                     
                                     setTimeout(async () => {
