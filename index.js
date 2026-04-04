@@ -300,9 +300,19 @@ jQuery(async () => {
         relativityThreshold: 0.5
     };
 
+    const DEFAULT_KB_ENTRY = {
+        name: "",
+        id: "",
+        enabled: false
+    };
+
+    const MAX_KB_COUNT = 10;
+    const STORAGE_KEY_KB_CONFIG = "memos_kb_config";
+
     // 全局变量
     let memosConfig = { ...DEFAULT_CONFIG };
     let memosSettings = { ...DEFAULT_SETTINGS };
+    let memosKbConfig = []; // 知识库配置列表
     let lastSaveTime = null;
     let lastRetrieveTime = null;
     let lastAddTime = null;
@@ -514,11 +524,28 @@ jQuery(async () => {
             const userId = await getCurrentUserId() || `st_user_${Date.now()}`;
             const conversationId = getCurrentCharName() || "default_conversation";
             
+            // 获取已启用且有ID的知识库列表
+            const enabledKbIds = memosKbConfig
+                .filter(kb => kb.enabled && kb.id && kb.id.trim())
+                .map(kb => kb.id.trim());
+            
+            // 统一使用 retrieveCount 控制所有接口的数量
+            const limitValue = memosSettings.retrieveCount || 5;
+            
             const data = {
                 query: query.trim(),
                 user_id: userId,
-                conversation_id: conversationId
+                conversation_id: conversationId,
+                memory_limit: limitValue,      // 控制长期记忆返回条数
+                preference_limit: limitValue, // 控制偏好记忆返回条数
+                skill_limit: limitValue       // 控制技能记忆返回条数
             };
+            
+            // 如果有启用的知识库，添加到请求中
+            if (enabledKbIds.length > 0) {
+                data.knowledgebase_ids = enabledKbIds;
+                logDebug(`将检索 ${enabledKbIds.length} 个知识库:`, enabledKbIds);
+            }
             
             logDebug("搜索请求:", JSON.stringify(data));
 
@@ -1302,6 +1329,111 @@ jQuery(async () => {
         jQuery("#memos-last-retrieve").text(lastRetrieveTime ? formatTime(lastRetrieveTime) : "从未");
         jQuery("#memos-last-save").text(lastAddTime ? formatTime(lastAddTime) : "从未");
     }
+
+    // ===================================================================================
+    // 13.5 知识库配置管理
+    // ===================================================================================
+
+    function loadKbConfig() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_KB_CONFIG);
+            if (saved) {
+                memosKbConfig = JSON.parse(saved);
+            } else {
+                // 初始化10个空知识库配置
+                memosKbConfig = Array.from({ length: MAX_KB_COUNT }, () => ({ ...DEFAULT_KB_ENTRY }));
+            }
+        } catch (e) {
+            logError("加载知识库配置失败:", e);
+            memosKbConfig = Array.from({ length: MAX_KB_COUNT }, () => ({ ...DEFAULT_KB_ENTRY }));
+        }
+    }
+
+    function saveKbConfig() {
+        try {
+            localStorage.setItem(STORAGE_KEY_KB_CONFIG, JSON.stringify(memosKbConfig));
+            logDebug("知识库配置已保存");
+        } catch (e) {
+            logError("保存知识库配置失败:", e);
+        }
+    }
+
+    function renderKbList() {
+        const $container = jQuery("#memos-kb-list");
+        if (!$container.length) return;
+
+        $container.empty();
+        
+        memosKbConfig.forEach((kb, index) => {
+            const displayName = kb.name || `知识库${index + 1}`;
+            const html = `
+                <div class="memos-kb-item" data-index="${index}">
+                    <div class="memos-kb-row">
+                        <input type="checkbox" class="memos-kb-enabled" ${kb.enabled ? 'checked' : ''}>
+                        <input type="text" class="memos-kb-name text_pole" placeholder="名称（方便识别）" value="${escapeHtml(kb.name)}" style="width: 120px;">
+                        <input type="text" class="memos-kb-id text_pole" placeholder="知识库ID" value="${escapeHtml(kb.id)}" style="width: 200px;">
+                        <button class="menu_button memos-kb-delete" title="删除此配置">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="memos-kb-hint">${displayName}</div>
+                </div>
+            `;
+            $container.append(html);
+        });
+
+        // 绑定事件
+        $container.find(".memos-kb-enabled").off("change").on("change", function() {
+            const index = parseInt(jQuery(this).closest(".memos-kb-item").data("index"));
+            memosKbConfig[index].enabled = jQuery(this).is(":checked");
+            saveKbConfig();
+            logDebug(`知识库${index + 1} 启用状态: ${memosKbConfig[index].enabled}`);
+        });
+
+        $container.find(".memos-kb-name").off("input").on("input", function() {
+            const index = parseInt(jQuery(this).closest(".memos-kb-item").data("index"));
+            memosKbConfig[index].name = jQuery(this).val();
+            const displayName = memosKbConfig[index].name || `知识库${index + 1}`;
+            jQuery(this).closest(".memos-kb-item").find(".memos-kb-hint").text(displayName);
+        });
+
+        $container.find(".memos-kb-name").off("blur").on("blur", function() {
+            saveKbConfig();
+        });
+
+        $container.find(".memos-kb-id").off("input").on("input", function() {
+            const index = parseInt(jQuery(this).closest(".memos-kb-item").data("index"));
+            memosKbConfig[index].id = jQuery(this).val();
+        });
+
+        $container.find(".memos-kb-id").off("blur").on("blur", function() {
+            saveKbConfig();
+        });
+
+        $container.find(".memos-kb-delete").off("click").on("click", function() {
+            const index = parseInt(jQuery(this).closest(".memos-kb-item").data("index"));
+            memosKbConfig[index] = { ...DEFAULT_KB_ENTRY };
+            saveKbConfig();
+            renderKbList();
+            showToastr("info", `已清空知识库${index + 1}配置`);
+        });
+
+        logDebug("知识库列表渲染完成");
+    }
+
+    function escapeHtml(text) {
+        if (!text) return "";
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function saveKbFromUI() {
+        // 从UI收集最新数据（blur事件已自动保存，这里只是确认）
+        saveKbConfig();
+        const enabledCount = memosKbConfig.filter(kb => kb.enabled && kb.id && kb.id.trim()).length;
+        showToastr("success", `知识库配置已保存，启用${enabledCount}个知识库`);
+    }
     
     // 定期更新统计显示（每5秒）
     function startStatsUpdater() {
@@ -1436,9 +1568,17 @@ jQuery(async () => {
             saveSettings();
         }
         
+        // 加载知识库配置
+        loadKbConfig();
+        
         loadSettings();
         loadSettingsToUI();
         updateStatsDisplay();
+        
+        // 渲染知识库列表
+        setTimeout(() => {
+            renderKbList();
+        }, 500);
         logDebug("当前配置:", JSON.stringify(memosConfig));
         logDebug("当前设置:", JSON.stringify(memosSettings));
         

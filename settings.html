@@ -106,9 +106,10 @@
         </div>
 
         <div class="setting_item">
-            <div class="setting_name">检索数量</div>
+            <div class="setting_name">记忆数量</div>
             <div class="setting_value">
-                <input type="number" id="memos-retrieve-count" class="text_pole" value="5" min="1" max="10" style="width: 80px;">
+                <input type="number" id="memos-retrieve-count" class="text_pole" value="5" min="1" max="25" style="width: 80px;">
+                <span style="color: #888; font-size: 11px; margin-left: 5px;">* 长期记忆/偏好记忆/技能记忆都使用此数量，建议5-25，最大支持25条</span>
             </div>
         </div>
 
@@ -116,6 +117,41 @@
             <div class="setting_name">相关度阈值 (0-1)</div>
             <div class="setting_value">
                 <input type="number" id="memos-relativity-threshold" class="text_pole" value="0.5" min="0" max="1" step="0.1" style="width: 80px;">
+            </div>
+        </div>
+
+        <hr />
+
+        <!-- 知识库配置 -->
+        <div class="memos-kb-section">
+            <div class="setting_name">
+                📚 知识库配置
+                <div class="memos-kb-tutorial">
+                    <details>
+                        <summary style="cursor: pointer; color: #f59e0b;">📖 知识库使用教程（点击展开）</summary>
+                        <div style="padding: 10px; background: #2a2a2a; border-radius: 5px; margin-top: 8px; font-size: 12px; color: #ccc;">
+                            <p style="margin: 0 0 8px 0;"><b>1️⃣ 知识库的作用</b></p>
+                            <p style="margin: 0 0 12px 0; padding-left: 10px;">知识库可以存储大量文档资料（PDF、Word、TXT等），AI在回答问题时可以结合知识库内容，让回答更准确、更专业。</p>
+                            
+                            <p style="margin: 0 0 8px 0;"><b>2️⃣ 如何添加知识库资料</b></p>
+                            <p style="margin: 0 0 5px 0; padding-left: 10px;">① 打开知识库管理页面：<a href="https://memos-dashboard.openmem.net/cn/knowledgeBase/" target="_blank" style="color: #60a5fa;">点击前往 →</a></p>
+                            <p style="margin: 0 0 5px 0; padding-left: 10px;">② 创建知识库（免费用户可创建10个）</p>
+                            <p style="margin: 0 0 5px 0; padding-left: 10px;">③ 上传你的文档资料（PDF、DOCX、TXT等）</p>
+                            <p style="margin: 0 0 12px 0; padding-left: 10px;">④ 复制知识库的ID，填到下方框中</p>
+                            
+                            <p style="margin: 0 0 8px 0;"><b>3️⃣ 如何在插件中使用</b></p>
+                            <p style="margin: 0; padding-left: 10px;">① 复制知识库ID（以"id_"开头）</p>
+                            <p style="margin: 0; padding-left: 10px;">② 粘贴到下方"知识库ID"输入框</p>
+                            <p style="margin: 0; padding-left: 10px;">③ 填写名称方便自己识别（如"产品手册"）</p>
+                            <p style="margin: 0; padding-left: 10px;">④ 勾选启用，保存配置即可生效</p>
+                        </div>
+                    </details>
+                </div>
+            </div>
+            <div class="setting_value">
+                <div id="memos-kb-list" class="memos-kb-list">
+                    <!-- 知识库配置项将通过JS动态渲染 -->
+                </div>
             </div>
         </div>
 
@@ -187,3 +223,98 @@
         </div>
     </div>
 </div>
+
+<style>
+/* 知识库配置样式 */
+.memos-kb-section {
+    margin-bottom: 10px;
+}
+
+.memos-kb-tutorial {
+    margin-top: 5px;
+}
+
+.memos-kb-tutorial details summary {
+    font-size: 12px;
+}
+
+.memos-kb-list {
+    margin-top: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.memos-kb-item {
+    background: #333;
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 8px;
+}
+
+.memos-kb-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.memos-kb-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.memos-kb-row input[type="text"] {
+    background: #444;
+    border: 1px solid #555;
+    color: #fff;
+    border-radius: 3px;
+    padding: 4px 8px;
+}
+
+.memos-kb-row input[type="text"]:focus {
+    border-color: #60a5fa;
+    outline: none;
+}
+
+.memos-kb-row input[type="text"]::placeholder {
+    color: #888;
+}
+
+.memos-kb-hint {
+    font-size: 11px;
+    color: #888;
+    margin-top: 4px;
+    padding-left: 26px;
+}
+
+.memos-kb-delete {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    background: #dc2626 !important;
+    color: #fff !important;
+}
+
+.memos-kb-delete:hover {
+    background: #ef4444 !important;
+}
+
+/* 滚动条样式 */
+.memos-kb-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.memos-kb-list::-webkit-scrollbar-track {
+    background: #2a2a2a;
+    border-radius: 3px;
+}
+
+.memos-kb-list::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+}
+
+.memos-kb-list::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+</style>
