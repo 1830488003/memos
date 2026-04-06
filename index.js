@@ -88,9 +88,25 @@ jQuery(async () => {
      * 显示 toast 通知
      */
     function showToastr(type, message) {
+        if (memosSettings && memosSettings.popupEnabled === false) {
+            return;
+        }
         if (typeof window.toastr !== 'undefined') {
             window.toastr[type](message, 'MemOS');
         }
+    }
+
+    async function showPopupSafe(message, popupType, options = {}) {
+        if (memosSettings && memosSettings.popupEnabled === false) {
+            logDebug("弹窗总开关已关闭，跳过 popup:", message);
+            return false;
+        }
+
+        if (!window.SillyTavern || typeof window.SillyTavern.callGenericPopup !== 'function') {
+            return false;
+        }
+
+        return await window.SillyTavern.callGenericPopup(message, popupType, options);
     }
 
     // --- 调试日志 ---
@@ -204,7 +220,7 @@ jQuery(async () => {
 
         async showUpdateConfirmDialog() {
             if (
-                await window.SillyTavern.callGenericPopup(
+                await showPopupSafe(
                     `发现新版本${this.latestVersion}！您想现在更新吗？`,
                     window.SillyTavern.GENERIC_POPUP_TYPES.confirm,
                     {
@@ -301,6 +317,7 @@ jQuery(async () => {
         autoSave: true,
         autoRetrieve: true,
         saveMemoryEnabled: true,
+        popupEnabled: true,
         uploadPrefix: "",
         injectionTypes: ["memory", "preference", "skill"],
         retrieveCount: 5,
@@ -798,6 +815,9 @@ jQuery(async () => {
             const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
             if (savedSettings) {
                 memosSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+                if (typeof memosSettings.popupEnabled !== "boolean" && typeof memosSettings.updatePopupEnabled === "boolean") {
+                    memosSettings.popupEnabled = memosSettings.updatePopupEnabled;
+                }
             }
         } catch (e) {
             logError("加载设置失败:", e);
@@ -835,6 +855,7 @@ jQuery(async () => {
         jQuery("#memos-auto-save").prop("checked", memosSettings.autoSave);
         jQuery("#memos-auto-retrieve").prop("checked", memosSettings.autoRetrieve);
         jQuery("#memos-save-memory-enabled").prop("checked", memosSettings.saveMemoryEnabled !== false);
+        jQuery("#memos-popup-enabled").prop("checked", memosSettings.popupEnabled !== false);
         jQuery("#memos-upload-prefix").val(memosSettings.uploadPrefix || "");
         jQuery("#memos-retrieve-count").val(memosSettings.retrieveCount);
         jQuery("#memos-relativity-threshold").val(memosSettings.relativityThreshold || 0.5);
@@ -1038,6 +1059,21 @@ jQuery(async () => {
         return false;
     }
 
+    function isMemoryInjectionContent(content) {
+        if (!content || typeof content !== "string") return false;
+        return content.includes("[MemOS 记忆上下文]") || content.includes("MemOS 记忆上下文）");
+    }
+
+    function shouldSkipInjectionBecausePreviousIsMemory(messages, targetIndex) {
+        if (!Array.isArray(messages) || targetIndex <= 0) {
+            return false;
+        }
+
+        const previousMessage = messages[targetIndex - 1];
+        const previousContent = previousMessage?.message || previousMessage?.content || previousMessage?.mes || "";
+        return isMemoryInjectionContent(previousContent);
+    }
+
     async function removeInjection() {
         try {
             await triggerSlashSafe(`/flushinject ${currentInjectionId}`);
@@ -1166,7 +1202,7 @@ jQuery(async () => {
                                 continue;
                             }
                             
-                            if (content.includes("[MemOS 记忆上下文]") || content.includes("MemOS 记忆上下文）")) {
+                            if (isMemoryInjectionContent(content)) {
                                 logDebug(`跳过注入记忆楼层 #${globalIndex}`);
                                 markMessageSaved(msgId);
                                 skipCount++;
@@ -1223,6 +1259,13 @@ jQuery(async () => {
                     lastKnownCharacterName = getCurrentCharName();
                     logDebug(`初始化结束，记录最新消息数: ${latestCountAfterInit}，后续只处理真正的新楼层`);
 
+                    const latestMessage = initMessages && initMessages.length > 0
+                        ? initMessages[initMessages.length - 1]
+                        : null;
+                    const latestMessageContent = latestMessage
+                        ? (latestMessage.message || latestMessage.content || latestMessage.mes || "")
+                        : "";
+
                     const lastUserMsg = initMessages
                         ? [...initMessages]
                             .reverse()
@@ -1238,6 +1281,13 @@ jQuery(async () => {
                         : null;
 
                     if (lastUserMsg && memosSettings.autoRetrieve) {
+                        if (isMemoryInjectionContent(latestMessageContent)) {
+                            logDebug("初始化完成后检测到最后一层是记忆楼层，跳过重复注入");
+                            isInitialized = true;
+                            isInitializing = false;
+                            return;
+                        }
+
                         const lastUserContent = lastUserMsg.message || lastUserMsg.content || lastUserMsg.mes || "";
                         await retrieveAndInjectForContent(lastUserContent, "初始化完成后补做一次检索");
                     }
@@ -1301,7 +1351,7 @@ jQuery(async () => {
                             continue;
                         }
                         
-                        if (content.includes("[MemOS 记忆上下文]") || content.includes("MemOS 记忆上下文）")) {
+                        if (isMemoryInjectionContent(content)) {
                             logDebug("跳过 MemOS 记忆注入楼层，不触发检索或保存");
                             processedMessageIndices.add(globalIndex);
                             markMessageSaved(msgId);
@@ -1335,6 +1385,12 @@ jQuery(async () => {
                             if (retrieveElapsed < 30000) {
                                 logDebug(`#${globalIndex} 检索冷却中`);
                             } else {
+                                if (shouldSkipInjectionBecausePreviousIsMemory(messages, i)) {
+                                    logDebug(`#${globalIndex} 的上一层是记忆楼层，跳过重复注入`);
+                                    processedMessageIndices.add(globalIndex);
+                                    continue;
+                                }
+
                                 lastRetrieveTimeForInterval = now;
                                 logDebug(`#${globalIndex} 检索记忆...`);
                                 
@@ -1369,7 +1425,7 @@ jQuery(async () => {
                         
                         const isNotUser = msg.role !== "user" && msg.is_user !== true;
                         
-                        if (content.includes("[MemOS 记忆上下文]") || content.includes("MemOS 记忆上下文）")) {
+                        if (isMemoryInjectionContent(content)) {
                             logDebug("跳过 MemOS 记忆注入楼层的AI消息保存");
                             processedMessageIndices.add(globalIndex);
                             markMessageSaved(msgId);
@@ -1802,6 +1858,11 @@ jQuery(async () => {
             saveSettings();
         });
 
+        jQuery("#memos-popup-enabled").on("change", function() {
+            memosSettings.popupEnabled = jQuery(this).is(":checked");
+            saveSettings();
+        });
+
         jQuery("#memos-upload-prefix").on("change blur", function() {
             memosSettings.uploadPrefix = jQuery(this).val() || "";
             saveSettings();
@@ -1917,10 +1978,20 @@ jQuery(async () => {
         bindSettingsEvents();
         startStatsUpdater(); // 启动统计信息定时更新
 
-        // 自动静默检查更新（5秒后执行）
-        setTimeout(() => {
-            Updater.checkForUpdates(false).catch(e => logDebug('自动检查更新失败:', e));
-        }, 5000);
+        // 启动10秒后自动检查更新（可选弹窗）
+        setTimeout(async () => {
+            try {
+                await Updater.checkForUpdates(false);
+                if (
+                    memosSettings.popupEnabled !== false
+                    && Updater.compareVersions(Updater.latestVersion, Updater.currentVersion) > 0
+                ) {
+                    await Updater.showUpdateConfirmDialog();
+                }
+            } catch (e) {
+                logDebug('自动检查更新失败:', e);
+            }
+        }, 10000);
 
         logDebug("MemOS插件完整初始化完成");
         showToastr("success", "MemOS插件已加载，轮询已启动");
