@@ -35,6 +35,39 @@
         </div>
         <hr />
 
+        <!-- 新手使用教程 -->
+        <div class="setting_item">
+            <div class="setting_name">新手使用教程</div>
+            <div class="setting_value" style="width: 100%;">
+                <details class="memos-quickstart-details">
+                    <summary style="cursor: pointer; color: #f59e0b;">📖 点我展开 MemOS 使用教程（推荐新手先看）</summary>
+                    <div class="memos-quickstart-content" style="padding: 10px; background: #2a2a2a; border-radius: 5px; margin-top: 8px; font-size: 12px; color: #ccc; line-height: 1.7;">
+                        <p style="margin: 0 0 10px 0;"><b>1️⃣ 先做什么？</b></p>
+                        <p style="margin: 0 0 10px 0; padding-left: 10px;">先去 MemOS 官网获取 API Key，没有 API Key 插件是无法正常工作的。</p>
+
+                        <p style="margin: 0 0 10px 0;"><b>2️⃣ API Key 在哪拿？</b></p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">① 打开 <a href="https://memos-dashboard-gray.openmem.net/cn/apikeys/" target="_blank" style="color: #60a5fa;">MemOS API Key 页面</a></p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">② 登录账号</p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">③ 点击“快速接入 Cloud API”</p>
+                        <p style="margin: 0 0 10px 0; padding-left: 10px;">④ 复制你的 API Key（通常是 mpg- 开头）</p>
+
+                        <p style="margin: 0 0 10px 0;"><b>3️⃣ 在插件里怎么填？</b></p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">① 把 API Key 粘贴到下面的“API 密钥”输入框</p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">② 点击“保存配置”</p>
+                        <p style="margin: 0 0 10px 0; padding-left: 10px;">③ 再点击“测试连接”，确认显示连接成功</p>
+
+                        <p style="margin: 0 0 10px 0;"><b>4️⃣ 下面几个开关怎么理解？</b></p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">- <b>保存记忆</b>：是否把你后续对话写进 MemOS</p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">- <b>自动检索记忆</b>：是否在聊天时自动去查记忆</p>
+                        <p style="margin: 0 0 5px 0; padding-left: 10px;">- <b>注入记忆类型</b>：控制把哪些类型的记忆塞进 prompt</p>
+                        <p style="margin: 0 0 10px 0; padding-left: 10px;">- <b>知识库配置</b>：适合只想查资料、不想存聊天记忆的用户</p>
+
+                        <p style="margin: 0; color: #fbbf24;"><b>💡 推荐给新手的最简单用法：</b> 填 API Key → 保存配置 → 测试连接 → 保持默认勾选直接使用。</p>
+                    </div>
+                </details>
+            </div>
+        </div>
+
         <!-- API配置 -->
         <div class="setting_item">
             <div class="setting_name">API 端点</div>
@@ -102,6 +135,44 @@
                     <input id="memos-auto-retrieve" type="checkbox" checked>
                     <span class="slider round"></span>
                 </label>
+            </div>
+        </div>
+
+        <div class="setting_item">
+            <div class="setting_name">保存记忆</div>
+            <div class="setting_value">
+                <label class="switch">
+                    <input id="memos-save-memory-enabled" type="checkbox" checked>
+                    <span class="slider round"></span>
+                </label>
+                <span style="color: #888; font-size: 11px; margin-left: 8px;">关闭后仅使用知识库/检索，不再写入新记忆</span>
+            </div>
+        </div>
+
+        <div class="setting_item">
+            <div class="setting_name">上传前置文本</div>
+            <div class="setting_value" style="display: flex; flex-direction: column; gap: 6px;">
+                <textarea id="memos-upload-prefix" class="text_pole" rows="5" placeholder="这里留空或填写你自己的上传前置文本。保存记忆时会自动拼接在消息最前面。" style="width: 350px; resize: vertical;"></textarea>
+                <span style="color: #888; font-size: 11px;">* 仅对“保存记忆”上传生效；你可以自己粘贴需要的前置内容</span>
+            </div>
+        </div>
+
+        <div class="setting_item">
+            <div class="setting_name">注入记忆类型</div>
+            <div class="setting_value" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" class="memos-injection-type" value="memory" checked>
+                    <span>长期记忆</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" class="memos-injection-type" value="preference" checked>
+                    <span>偏好记忆</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" class="memos-injection-type" value="skill" checked>
+                    <span>技能记忆</span>
+                </label>
+                <span style="color: #888; font-size: 11px; width: 100%;">可按需勾选要注入到 prompt 的记忆类别</span>
             </div>
         </div>
 
