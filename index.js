@@ -343,6 +343,8 @@ jQuery(async () => {
     let totalMemories = 0;
     let sessionsSaved = 0;
     let totalRetrieves = 0;
+    let totalInjections = 0;
+    let lastInjectionStats = { memories: 0, preferences: 0, skills: 0 };
     let currentInjectionId = "memos_memory_injection";
     let isGenerating = false;
     let isInjectingMemory = false;
@@ -943,6 +945,18 @@ jQuery(async () => {
         }
     }
 
+    function getCurrentChatSavedCount() {
+        const chatFile = getChatFileNameSync();
+        if (!chatFile) return 0;
+        let count = 0;
+        for (const msgId of savedMessageIds) {
+            if (msgId.startsWith(`${chatFile}_idx_`)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     // ===================================================================================
     // 10. 记忆注入
     // ===================================================================================
@@ -1016,6 +1030,13 @@ jQuery(async () => {
                     { refresh: 'affected' },
                 );
                 logDebug("记忆注入成功 (TavernHelper.createChatMessages)");
+                totalInjections++;
+                lastInjectionStats = {
+                    memories: Array.isArray(memories) ? memories.length : 0,
+                    preferences: Array.isArray(preferences) ? preferences.length : 0,
+                    skills: Array.isArray(skills) ? skills.length : 0,
+                };
+                updateStatsDisplay();
                 return true;
             }
 
@@ -1680,8 +1701,22 @@ jQuery(async () => {
     }
 
     function updateStatsDisplay() {
-        jQuery("#memos-sessions-saved").text(savedMessageIds.size);
+        const enabledKbCount = memosKbConfig.filter(kb => kb.enabled && kb.id && kb.id.trim()).length;
+        const currentChatName = getChatFileNameSync() || "未获取";
+        const currentCharacterName = getCurrentCharName() || "未获取";
+
+        jQuery("#memos-current-chat-saved").text(getCurrentChatSavedCount());
+        jQuery("#memos-session-new-saved").text(sessionsSaved);
         jQuery("#memos-retrieves-count").text(totalRetrieves);
+        jQuery("#memos-injections-count").text(totalInjections);
+        jQuery("#memos-last-injection-detail").text(
+            `记忆${lastInjectionStats.memories} / 偏好${lastInjectionStats.preferences} / 技能${lastInjectionStats.skills}`,
+        );
+        jQuery("#memos-enabled-kb-count").text(enabledKbCount);
+        jQuery("#memos-current-chat-name").text(currentChatName);
+        jQuery("#memos-current-character-name").text(currentCharacterName);
+        jQuery("#memos-save-status").text(memosSettings.saveMemoryEnabled ? "开启" : "关闭");
+        jQuery("#memos-popup-status").text(memosSettings.popupEnabled === false ? "关闭" : "开启");
         jQuery("#memos-last-retrieve").text(lastRetrieveTime ? formatTime(lastRetrieveTime) : "从未");
         jQuery("#memos-last-save").text(lastAddTime ? formatTime(lastAddTime) : "从未");
     }
