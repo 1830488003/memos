@@ -12,6 +12,7 @@ jQuery(async () => {
 
     // --- 全局变量 ---
     let tavernHelperApi = null;
+    let scriptModuleApi = null;
 
     // --- 延迟函数 ---
     const delay = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -82,6 +83,16 @@ jQuery(async () => {
             return window.SillyTavern.getContext();
         }
         return null;
+    }
+
+    async function tryLoadScriptModule() {
+        if (scriptModuleApi) return scriptModuleApi;
+        try {
+            scriptModuleApi = await import('../../../script.js');
+        } catch (error) {
+            logDebug('无法导入官方 script.js:', error);
+        }
+        return scriptModuleApi;
     }
 
     /**
@@ -1003,55 +1014,190 @@ jQuery(async () => {
         return context;
     }
 
-    async function injectMemoryToPrompt(memories, preferences, skills) {
-        if (!memosSettings.enabled || !memosSettings.autoRetrieve) {
-            logDebug("自动检索未启用");
+    function stripMemoryInjectionFromText(text) {
+        return String(text || '')
+            .replace(/\n?\[MemOS 记忆上下文\][\s\S]*?\[\/MemOS 记忆上下文\]\n?/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    function buildInlineInjectedUserText(originalText, injectionContext) {
+        const cleanOriginal = stripMemoryInjectionFromText(originalText);
+        const cleanInjection = String(injectionContext || '').trim();
+        if (!cleanInjection) return cleanOriginal;
+        if (!cleanOriginal) return cleanInjection;
+        return `${cleanOriginal}\n\n${cleanInjection}`;
+    }
+
+    async function forceSaveViaOfficialEditor(messageIndex, newText) {
+        const messageBlock = $(`#chat .mes[mesid="${messageIndex}"]`);
+        if (!messageBlock.length) {
             return false;
         }
 
-        const context = formatInjectionContext(memories, preferences, skills);
-        if (!context || context.length < 50) {
-            logDebug("没有足够的记忆内容");
+        const editButton = messageBlock.find('.mes_edit').first();
+        if (!editButton.length) {
             return false;
         }
 
-        try {
-            if (tavernHelperApi && typeof tavernHelperApi.createChatMessages === "function") {
-                logDebug("使用 TavernHelper.createChatMessages 注入...");
-                await tavernHelperApi.createChatMessages(
-                    [
-                        {
-                            role: 'system',
-                            name: 'MemOS记忆',
-                            message: context,
-                            is_hidden: false,
-                        },
-                    ],
-                    { refresh: 'affected' },
-                );
-                logDebug("记忆注入成功 (TavernHelper.createChatMessages)");
-                totalInjections++;
-                lastInjectionStats = {
-                    memories: Array.isArray(memories) ? memories.length : 0,
-                    preferences: Array.isArray(preferences) ? preferences.length : 0,
-                    skills: Array.isArray(skills) ? skills.length : 0,
-                };
-                updateStatsDisplay();
-                return true;
+        editButton.trigger('click');
+        await delay(50);
+
+        const textarea = messageBlock.find('.edit_textarea:visible').first();
+        if (!textarea.length) {
+            return false;
+        }
+
+        textarea.val(String(newText || ''));
+        const textareaElement = textarea.get(0);
+        if (textareaElement) {
+            textareaElement.dispatchEvent(new Event('input', { bubbles: true }));
+            textareaElement.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        await delay(50);
+
+        const doneButton = messageBlock.find('.mes_edit_done:visible').first();
+        if (!doneButton.length) {
+            return false;
+        }
+
+        doneButton.trigger('click');
+        await delay(120);
+        return true;
+    }
+
+    async function updateChatMessageInline(messageIndex, newText) {
+        const context = getSillyTavernContext();
+        const chat = Array.isArray(context?.chat) ? context.chat : null;
+        if (!chat || !chat[messageIndex]) {
+            throw new Error(`未找到要修改的消息楼层: ${messageIndex}`);
+        }
+
+        const targetMessage = chat[messageIndex];
+        targetMessage.mes = String(newText || '');
+
+        if (
+            Array.isArray(targetMessage.swipes)
+            && typeof targetMessage.swipe_id === 'number'
+            && targetMessage.swipes[targetMessage.swipe_id] !== undefined
+        ) {
+            targetMessage.swipes[targetMessage.swipe_id] = targetMessage.mes;
+        }
+
+        const scriptModule = await tryLoadScriptModule();
+        if (typeof scriptModule?.syncMesToSwipe === 'function') {
+            scriptModule.syncMesToSwipe(targetMessage);
+        }
+        if (typeof scriptModule?.updateMessageBlock === 'function') {
+            scriptModule.updateMessageBlock(Number(messageIndex), targetMessage);
+        }
+        if (scriptModule?.eventSource && scriptModule?.event_types?.MESSAGE_UPDATED) {
+            await scriptModule.eventSource.emit(scriptModule.event_types.MESSAGE_UPDATED, Number(messageIndex));
+        }
+        if (typeof context?.saveChat === 'function') {
+            await context.saveChat();
+        } else if (typeof scriptModule?.saveChatConditional === 'function') {
+            await scriptModule.saveChatConditional();
+        }
+
+        if (typeof scriptModule?.reloadCurrentChat === 'function') {
+            await scriptModule.reloadCurrentChat();
+        }
+
+        const usedOfficialEditor = await forceSaveViaOfficialEditor(messageIndex, targetMessage.mes);
+        if (usedOfficialEditor) {
+            logDebug(`已通过官方编辑保存流程刷新用户楼层 #${messageIndex}`);
+        } else {
+            logDebug(`未能走官方编辑保存流程，已使用数据层刷新用户楼层 #${messageIndex}`);
+        }
+
+        return targetMessage;
+    }
+
+    async function findLatestUserMessageIndex() {
+        const context = getSillyTavernContext();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const msg = chat[i];
+            if (!msg) continue;
+            const isUser = msg.is_user === true || msg.role === 'user';
+            const content = msg.message || msg.content || msg.mes || '';
+            if (isUser && String(content).trim()) {
+                return i;
             }
+        }
+        return -1;
+    }
 
-            logError("没有可用的注入方法");
+    async function injectMemoryIntoUserMessage(memories, preferences, skills, targetIndex = null) {
+        if (!memosSettings.enabled || !memosSettings.autoRetrieve) {
+            logDebug('自动检索未启用');
             return false;
+        }
+
+        const injectionContext = formatInjectionContext(memories, preferences, skills);
+        if (!injectionContext || injectionContext.length < 50) {
+            logDebug('没有足够的记忆内容');
+            return false;
+        }
+
+        const messageIndex = Number.isInteger(targetIndex) && targetIndex >= 0
+            ? targetIndex
+            : await findLatestUserMessageIndex();
+
+        if (messageIndex < 0) {
+            logDebug('未找到可写入记忆的用户楼层');
+            return false;
+        }
+
+        const context = getSillyTavernContext();
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const targetMessage = chat[messageIndex];
+        if (!targetMessage) {
+            logDebug(`未找到目标用户消息 #${messageIndex}`);
+            return false;
+        }
+
+        const originalContent = targetMessage.mes || targetMessage.message || targetMessage.content || '';
+        const injectedText = buildInlineInjectedUserText(originalContent, injectionContext);
+        await updateChatMessageInline(messageIndex, injectedText);
+
+        logDebug(`记忆已直接写入用户楼层 #${messageIndex}`);
+        totalInjections++;
+        lastInjectionStats = {
+            memories: Array.isArray(memories) ? memories.length : 0,
+            preferences: Array.isArray(preferences) ? preferences.length : 0,
+            skills: Array.isArray(skills) ? skills.length : 0,
+        };
+        updateStatsDisplay();
+        return true;
+    }
+
+    async function injectMemoryToPrompt(memories, preferences, skills, targetIndex = null) {
+        try {
+            return await injectMemoryIntoUserMessage(memories, preferences, skills, targetIndex);
         } catch (e) {
-            logError("注入失败:", e);
+            logError('注入失败:', e);
             return false;
         }
     }
 
-    async function retrieveAndInjectForContent(content, sourceLabel = "手动触发") {
+    async function retrieveAndInjectForContent(content, sourceLabel = "手动触发", targetIndex = null) {
         if (!content || !content.trim()) {
             logDebug(`${sourceLabel}: 内容为空，跳过检索`);
             return false;
+        }
+
+        if (Number.isInteger(targetIndex) && targetIndex >= 0) {
+            const context = getSillyTavernContext();
+            const chat = Array.isArray(context?.chat) ? context.chat : [];
+            const targetMessage = chat[targetIndex];
+            const targetContent = targetMessage?.mes || targetMessage?.message || targetMessage?.content || '';
+            if (isMemoryInjectionContent(targetContent)) {
+                logDebug(`${sourceLabel}: 目标用户楼层 #${targetIndex} 已包含记忆注入，跳过重复注入`);
+                return false;
+            }
         }
 
         try {
@@ -1064,7 +1210,7 @@ jQuery(async () => {
                 (result.preferences && result.preferences.length > 0) ||
                 (result.skills && result.skills.length > 0)
             )) {
-                const injected = await injectMemoryToPrompt(result.memories, result.preferences, result.skills);
+                const injected = await injectMemoryToPrompt(result.memories, result.preferences, result.skills, targetIndex);
                 if (injected) {
                     const memCount = result.memories ? result.memories.length : 0;
                     const prefCount = result.preferences ? result.preferences.length : 0;
@@ -1095,8 +1241,33 @@ jQuery(async () => {
         return isMemoryInjectionContent(previousContent);
     }
 
+    function shouldSkipInjectionBecauseUserAlreadyHasMemory(message) {
+        if (!message) {
+            return false;
+        }
+        const isUser = message.is_user === true || message.role === 'user';
+        if (!isUser) {
+            return false;
+        }
+        const content = message.message || message.content || message.mes || '';
+        return isMemoryInjectionContent(content);
+    }
+
     async function removeInjection() {
         try {
+            const messageIndex = await findLatestUserMessageIndex();
+            if (messageIndex >= 0) {
+                const context = getSillyTavernContext();
+                const chat = Array.isArray(context?.chat) ? context.chat : [];
+                const targetMessage = chat[messageIndex];
+                const oldText = targetMessage?.mes || '';
+                const newText = stripMemoryInjectionFromText(oldText);
+                if (newText !== oldText) {
+                    await updateChatMessageInline(messageIndex, newText);
+                    logDebug(`已从用户楼层 #${messageIndex} 移除内联记忆注入`);
+                }
+            }
+
             await triggerSlashSafe(`/flushinject ${currentInjectionId}`);
             logDebug("注入已移除");
             return true;
@@ -1224,7 +1395,7 @@ jQuery(async () => {
                             }
                             
                             if (isMemoryInjectionContent(content)) {
-                                logDebug(`跳过注入记忆楼层 #${globalIndex}`);
+                                logDebug(`跳过已带记忆内容的楼层 #${globalIndex}`);
                                 markMessageSaved(msgId);
                                 skipCount++;
                                 continue;
@@ -1280,13 +1451,6 @@ jQuery(async () => {
                     lastKnownCharacterName = getCurrentCharName();
                     logDebug(`初始化结束，记录最新消息数: ${latestCountAfterInit}，后续只处理真正的新楼层`);
 
-                    const latestMessage = initMessages && initMessages.length > 0
-                        ? initMessages[initMessages.length - 1]
-                        : null;
-                    const latestMessageContent = latestMessage
-                        ? (latestMessage.message || latestMessage.content || latestMessage.mes || "")
-                        : "";
-
                     const lastUserMsg = initMessages
                         ? [...initMessages]
                             .reverse()
@@ -1295,22 +1459,21 @@ jQuery(async () => {
                                 const isUser = msg.is_user === true || msg.role === "user";
                                 return isUser
                                     && content
-                                    && content.trim()
-                                    && !content.includes("[MemOS 记忆上下文]")
-                                    && !content.includes("MemOS 记忆上下文）");
+                                    && content.trim();
                             })
                         : null;
 
                     if (lastUserMsg && memosSettings.autoRetrieve) {
-                        if (isMemoryInjectionContent(latestMessageContent)) {
-                            logDebug("初始化完成后检测到最后一层是记忆楼层，跳过重复注入");
+                        if (shouldSkipInjectionBecauseUserAlreadyHasMemory(lastUserMsg)) {
+                            logDebug("初始化完成后检测到最新用户楼层已包含记忆，跳过重复注入");
                             isInitialized = true;
                             isInitializing = false;
                             return;
                         }
 
                         const lastUserContent = lastUserMsg.message || lastUserMsg.content || lastUserMsg.mes || "";
-                        await retrieveAndInjectForContent(lastUserContent, "初始化完成后补做一次检索");
+                        const lastUserIndex = initMessages.lastIndexOf(lastUserMsg);
+                        await retrieveAndInjectForContent(lastUserContent, "初始化完成后补做一次检索", lastUserIndex);
                     }
 
                     isInitialized = true;
@@ -1373,7 +1536,7 @@ jQuery(async () => {
                         }
                         
                         if (isMemoryInjectionContent(content)) {
-                            logDebug("跳过 MemOS 记忆注入楼层，不触发检索或保存");
+                            logDebug("跳过已带 MemOS 记忆内容的楼层，不触发检索或保存");
                             processedMessageIndices.add(globalIndex);
                             markMessageSaved(msgId);
                             continue;
@@ -1406,6 +1569,12 @@ jQuery(async () => {
                             if (retrieveElapsed < 30000) {
                                 logDebug(`#${globalIndex} 检索冷却中`);
                             } else {
+                                if (shouldSkipInjectionBecauseUserAlreadyHasMemory(msg)) {
+                                    logDebug(`#${globalIndex} 用户楼层已包含记忆，跳过重复注入`);
+                                    processedMessageIndices.add(globalIndex);
+                                    continue;
+                                }
+
                                 if (shouldSkipInjectionBecausePreviousIsMemory(messages, i)) {
                                     logDebug(`#${globalIndex} 的上一层是记忆楼层，跳过重复注入`);
                                     processedMessageIndices.add(globalIndex);
@@ -1427,7 +1596,7 @@ jQuery(async () => {
                                 }
                                 
                                 try {
-                                    await retrieveAndInjectForContent(content, `#${globalIndex}`);
+                                    await retrieveAndInjectForContent(content, `#${globalIndex}`, globalIndex);
                                     
                                     setTimeout(async () => {
                                         try {
@@ -1437,7 +1606,7 @@ jQuery(async () => {
                                         } catch (e) {
                                             logError("触发生成失败:", e);
                                         }
-                                    }, 1000);
+                                    }, 2000);
                                 } catch (e) {
                                     logError("检索失败:", e);
                                 }
@@ -1616,7 +1785,7 @@ jQuery(async () => {
 
             if (lastUserMsg) {
                 const content = lastUserMsg.message || lastUserMsg.content || lastUserMsg.mes || "";
-                const result = await searchMemory(content, memosSettings.retrieveCount);
+                                const result = await searchMemory(content, memosSettings.retrieveCount);
                 if (result && (
                     (result.memories && result.memories.length > 0) ||
                     (result.preferences && result.preferences.length > 0) ||
@@ -1626,7 +1795,7 @@ jQuery(async () => {
                     jQuery("#memos-injection-preview").val(context || "当前未选择任何可注入的记忆类型，或所选类型暂无结果");
                     const injected = await injectMemoryToPrompt(result.memories, result.preferences, result.skills);
                     if (injected) {
-                        showToastr("success", "记忆已注入到prompt");
+                        showToastr("success", "记忆已直接注入到用户消息楼层");
                     } else {
                         showToastr("info", "当前没有可注入的记忆内容");
                     }
